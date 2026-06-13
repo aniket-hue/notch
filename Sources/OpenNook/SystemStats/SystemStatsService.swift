@@ -2,33 +2,30 @@ import Foundation
 import Darwin
 import IOKit
 import IOKit.ps
-import Metal
 
-/// A single snapshot of all the metrics we display.
 struct Metrics: Equatable {
-    var cpu: Double = 0            // 0...1
-    var memUsed: UInt64 = 0       // bytes
-    var memTotal: UInt64 = 0      // bytes
-    var gpu: Double = 0           // 0...1
-    var diskUsed: Int64 = 0       // bytes
-    var diskTotal: Int64 = 0      // bytes
-    var batteryLevel: Double = 0  // 0...1
+    var cpu: Double = 0
+    var memUsed: UInt64 = 0
+    var memTotal: UInt64 = 0
+    var gpu: Double = 0
+    var diskUsed: Int64 = 0
+    var diskTotal: Int64 = 0
+    var batteryLevel: Double = 0
     var charging: Bool = false
     var hasBattery: Bool = false
-    var netDown: Double = 0       // bytes/sec
-    var netUp: Double = 0         // bytes/sec
-    var uptime: TimeInterval = 0  // seconds
-    var cpuHistory: [Double] = []  // rolling CPU usage samples, each 0...1
+    var netDown: Double = 0
+    var netUp: Double = 0
+    var uptime: TimeInterval = 0
+    var cpuHistory: [Double] = []
+    var memHistory: [Double] = []
+    var gpuHistory: [Double] = []
 }
 
-/// Samples system metrics on a timer and publishes them for the UI.
 @MainActor
 final class SystemStatsService: ObservableObject {
 
     @Published private(set) var metrics = Metrics()
 
-    let coreCount = ProcessInfo.processInfo.processorCount
-    let gpuName = MTLCreateSystemDefaultDevice()?.name ?? "GPU"
     let memTotal = ProcessInfo.processInfo.physicalMemory
 
     private var timer: Timer?
@@ -36,8 +33,10 @@ final class SystemStatsService: ObservableObject {
     private var prevNet: (rx: UInt64, tx: UInt64)?
     private var prevNetTime: TimeInterval?
 
-    private let historyLength = 48
-    private var history = [Double](repeating: 0, count: 48)
+    private let historyLen = 60
+    private var cpuHist = [Double](repeating: 0, count: 60)
+    private var memHist = [Double](repeating: 0, count: 60)
+    private var gpuHist = [Double](repeating: 0, count: 60)
 
     func start() {
         sample()
@@ -72,14 +71,16 @@ final class SystemStatsService: ObservableObject {
         m.netUp = net.up
         m.uptime = Self.uptime()
 
-        history.removeFirst()
-        history.append(m.cpu)
-        m.cpuHistory = history
+        let memFrac = m.memTotal > 0 ? Double(m.memUsed) / Double(m.memTotal) : 0
+        cpuHist.removeFirst(); cpuHist.append(m.cpu)
+        memHist.removeFirst(); memHist.append(memFrac)
+        gpuHist.removeFirst(); gpuHist.append(m.gpu)
+        m.cpuHistory = cpuHist
+        m.memHistory = memHist
+        m.gpuHistory = gpuHist
 
         metrics = m
     }
-
-    // MARK: - CPU
 
     private func cpuUsage() -> Double {
         guard let ticks = Self.hostCPULoad() else { return metrics.cpu }
@@ -107,8 +108,6 @@ final class SystemStatsService: ObservableObject {
         return result == KERN_SUCCESS ? load : nil
     }
 
-    // MARK: - Memory
-
     private static func memoryUsed() -> UInt64 {
         var count = mach_msg_type_number_t(
             MemoryLayout<vm_statistics64_data_t>.stride / MemoryLayout<integer_t>.stride)
@@ -120,12 +119,10 @@ final class SystemStatsService: ObservableObject {
         }
         guard result == KERN_SUCCESS else { return 0 }
         let page = UInt64(vm_kernel_page_size)
-        // Approximates Activity Monitor's "Memory Used": active + wired + compressed.
+
         return (UInt64(stats.active_count) + UInt64(stats.wire_count)
                 + UInt64(stats.compressor_page_count)) * page
     }
-
-    // MARK: - GPU (IOKit accelerator performance statistics)
 
     private static func gpuUsage() -> Double {
         var iterator: io_iterator_t = 0
@@ -153,8 +150,6 @@ final class SystemStatsService: ObservableObject {
         return n > 0 ? max(0, min(1, sum / Double(n) / 100.0)) : 0
     }
 
-    // MARK: - Storage
-
     private static func storage() -> (used: Int64, total: Int64) {
         let url = URL(fileURLWithPath: "/")
         guard let values = try? url.resourceValues(forKeys: [
@@ -163,8 +158,6 @@ final class SystemStatsService: ObservableObject {
         let available = values.volumeAvailableCapacityForImportantUsage ?? 0
         return (Int64(total) - available, Int64(total))
     }
-
-    // MARK: - Battery
 
     private static func battery() -> (level: Double, charging: Bool, present: Bool) {
         guard let snap = IOPSCopyPowerSourcesInfo()?.takeRetainedValue(),
@@ -181,8 +174,6 @@ final class SystemStatsService: ObservableObject {
         }
         return (0, false, false)
     }
-
-    // MARK: - Network
 
     private func networkThroughput() -> (down: Double, up: Double) {
         let now = Date().timeIntervalSince1970
@@ -216,8 +207,6 @@ final class SystemStatsService: ObservableObject {
         }
         return (rx, tx)
     }
-
-    // MARK: - Uptime
 
     private static func uptime() -> TimeInterval {
         var boottime = timeval()

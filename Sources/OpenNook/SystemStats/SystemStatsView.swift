@@ -1,95 +1,121 @@
 import SwiftUI
 
-// MARK: - Expanded System dashboard
-
-/// The expanded "System" panel: header + Live dot, a big CPU Load number with a
-/// live area/line graph, then a list of metrics — styled per the OpenNook design.
 struct SystemStatsView: View {
     @ObservedObject var stats: SystemStatsService
 
+    @State private var hoverFrac: Double?
+
     private var m: Metrics { stats.metrics }
+    private var memFrac: Double { m.memTotal > 0 ? Double(m.memUsed) / Double(m.memTotal) : 0 }
+
+    private let cpuColor = Color(red: 0.36, green: 0.62, blue: 1.0)
+    private let memColor = Color(red: 0.30, green: 0.86, blue: 0.52)
+    private let gpuColor = Color(red: 1.0, green: 0.72, blue: 0.36)
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            header
-            cpuLoad
-            list
+        VStack(alignment: .leading, spacing: 9) {
+            legend
+            graph
+            VStack(spacing: 6) {
+                row("Network", "↓ \(mbps(m.netDown))  ↑ \(mbps(m.netUp)) MB/s")
+                if m.hasBattery {
+                    row("Battery", "\(pct(m.batteryLevel))%\(m.charging ? " ⚡︎" : "")")
+                }
+                row("Uptime", uptime(m.uptime))
+            }
+        }
+    }
+
+    private var hoverIndex: Int? {
+        guard let f = hoverFrac, m.cpuHistory.count > 1 else { return nil }
+        return Int((f * Double(m.cpuHistory.count - 1)).rounded())
+    }
+
+    private var legend: some View {
+        HStack(spacing: 14) {
+            legendItem("CPU", cpuColor, value(m.cpuHistory, fallback: m.cpu))
+            legendItem("MEM", memColor, value(m.memHistory, fallback: memFrac))
+            legendItem("GPU", gpuColor, value(m.gpuHistory, fallback: m.gpu))
             Spacer(minLength: 0)
         }
-        .padding(.horizontal, 20)
     }
 
-    private var header: some View {
-        HStack {
-            Text("SYSTEM")
-                .font(.system(size: 11, weight: .semibold))
-                .tracking(1.6)
+    private func legendItem(_ name: String, _ color: Color, _ v: Int) -> some View {
+        HStack(spacing: 4) {
+            Capsule().fill(color).frame(width: 9, height: 2)
+            Text(name)
+                .font(.system(size: 8, weight: .semibold, design: .rounded))
+                .tracking(0.5)
                 .foregroundStyle(Theme.label)
-            Spacer()
-            HStack(spacing: 6) {
-                LiveDot()
-                Text("LIVE")
-                    .font(.system(size: 10, design: .monospaced))
-                    .tracking(1.4)
-                    .foregroundStyle(Theme.textTertiary)
-            }
+            Text("\(v)%")
+                .font(.system(size: 10, weight: .semibold, design: .rounded))
+                .monospacedDigit()
+                .foregroundStyle(color)
         }
     }
 
-    private var cpuLoad: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            HStack(alignment: .bottom) {
-                Text("CPU Load")
-                    .font(.system(size: 12))
-                    .foregroundStyle(Theme.textSecondary)
-                Spacer()
-                HStack(alignment: .firstTextBaseline, spacing: 1) {
-                    Text("\(pct(m.cpu))")
-                        .font(.system(size: 24, weight: .semibold))
-                        .monospacedDigit()
-                        .foregroundStyle(Theme.textPrimary)
-                    Text("%")
-                        .font(.system(size: 13, weight: .medium))
-                        .foregroundStyle(Theme.textTertiary)
+    private var graph: some View {
+        GeometryReader { geo in
+            ZStack(alignment: .topLeading) {
+                Canvas { ctx, size in
+                    drawLine(ctx, m.cpuHistory, size, cpuColor)
+                    drawLine(ctx, m.memHistory, size, memColor)
+                    drawLine(ctx, m.gpuHistory, size, gpuColor)
+                }
+                if let f = hoverFrac {
+                    Rectangle().fill(.white.opacity(0.3))
+                        .frame(width: 1)
+                        .position(x: f * geo.size.width, y: geo.size.height / 2)
                 }
             }
-            CPUGraph(history: m.cpuHistory)
-        }
-    }
-
-    private var list: some View {
-        VStack(spacing: 12) {
-            StatRow(label: "Memory",
-                    value: "\(gb(m.memUsed)) / \(gb(m.memTotal))",
-                    fraction: frac(Double(m.memUsed), Double(m.memTotal)))
-            StatRow(label: "GPU", value: "\(pct(m.gpu))%", fraction: m.gpu)
-            StatRow(label: "Storage",
-                    value: "\(gb(UInt64(max(0, m.diskUsed)))) / \(gb(UInt64(max(0, m.diskTotal))))",
-                    fraction: frac(Double(m.diskUsed), Double(m.diskTotal)))
-            StatRow(label: "Network",
-                    value: "↓ \(mbps(m.netDown))  ↑ \(mbps(m.netUp)) MB/s",
-                    fraction: min(1, m.netDown / 12_000_000))
-            if m.hasBattery {
-                StatRow(label: "Battery",
-                        value: "\(pct(m.batteryLevel))%\(m.charging ? " ⚡︎" : "")",
-                        fraction: m.batteryLevel)
+            .contentShape(Rectangle())
+            .onContinuousHover { phase in
+                switch phase {
+                case .active(let p): hoverFrac = min(1, max(0, p.x / geo.size.width))
+                case .ended: hoverFrac = nil
+                }
             }
-            StatRow(label: "Uptime", value: uptime(m.uptime), fraction: nil)
+        }
+        .frame(height: 50)
+        .background(Color.white.opacity(0.04))
+        .clipShape(RoundedRectangle(cornerRadius: 8))
+    }
+
+    private func drawLine(_ ctx: GraphicsContext, _ data: [Double], _ size: CGSize, _ color: Color) {
+        guard data.count > 1 else { return }
+        let w = size.width, h = size.height, n = data.count
+        var path = Path()
+        for (i, v) in data.enumerated() {
+            let x = w * CGFloat(i) / CGFloat(n - 1)
+            let y = h - CGFloat(min(1, max(0, v))) * h
+            if i == 0 { path.move(to: CGPoint(x: x, y: y)) } else { path.addLine(to: CGPoint(x: x, y: y)) }
+        }
+        ctx.stroke(path, with: .color(color),
+                   style: StrokeStyle(lineWidth: 1.6, lineCap: .round, lineJoin: .round))
+    }
+
+    private func row(_ label: String, _ value: String) -> some View {
+        HStack {
+            Text(label)
+                .font(.system(size: 10, design: .rounded))
+                .foregroundStyle(Theme.textSecondary)
+            Spacer()
+            Text(value)
+                .font(.system(size: 11, weight: .medium, design: .rounded))
+                .monospacedDigit()
+                .foregroundStyle(.white)
         }
     }
 
-    // MARK: Formatting
+    private func value(_ data: [Double], fallback: Double) -> Int {
+        let v: Double
+        if let i = hoverIndex, data.indices.contains(i) { v = data[i] } else { v = fallback }
+        return Int((v * 100).rounded())
+    }
 
     private func pct(_ v: Double) -> Int { Int((v * 100).rounded()) }
-    private func frac(_ a: Double, _ b: Double) -> Double { b > 0 ? min(1, a / b) : 0 }
     private func mbps(_ bytesPerSec: Double) -> String {
         String(format: "%.1f", bytesPerSec / 1_000_000)
-    }
-    private func gb(_ bytes: UInt64) -> String {
-        let f = ByteCountFormatter()
-        f.allowedUnits = [.useGB, .useTB]
-        f.countStyle = .memory
-        return f.string(fromByteCount: Int64(bytes))
     }
     private func uptime(_ t: TimeInterval) -> String {
         let total = Int(t)
@@ -97,122 +123,5 @@ struct SystemStatsView: View {
         if d > 0 { return "\(d)d \(h)h \(min)m" }
         if h > 0 { return "\(h)h \(min)m" }
         return "\(min)m"
-    }
-}
-
-// MARK: - Components
-
-/// Pulsing orange "live" indicator dot.
-private struct LiveDot: View {
-    @State private var on = false
-    var body: some View {
-        Circle()
-            .fill(Theme.accent)
-            .frame(width: 6, height: 6)
-            .opacity(on ? 1 : 0.35)
-            .scaleEffect(on ? 1 : 0.8)
-            .animation(.easeInOut(duration: 0.8).repeatForever(autoreverses: true), value: on)
-            .onAppear { on = true }
-    }
-}
-
-/// One label · value · thin-bar row.
-private struct StatRow: View {
-    let label: String
-    let value: String
-    var fraction: Double?
-
-    var body: some View {
-        VStack(spacing: 6) {
-            HStack(alignment: .firstTextBaseline) {
-                Text(label)
-                    .font(.system(size: 12))
-                    .foregroundStyle(Theme.textSecondary)
-                Spacer()
-                Text(value)
-                    .font(Theme.monoValue)
-                    .monospacedDigit()
-                    .foregroundStyle(Theme.textPrimary)
-            }
-            if let fraction {
-                GeometryReader { geo in
-                    ZStack(alignment: .leading) {
-                        Capsule().fill(Theme.trackBg)
-                        Capsule().fill(Theme.barFill)
-                            .frame(width: max(2, geo.size.width * fraction))
-                    }
-                }
-                .frame(height: 4)
-                .animation(.easeOut(duration: 0.3), value: fraction)
-            }
-        }
-    }
-}
-
-/// Live CPU area + line graph (orange), per the design.
-private struct CPUGraph: View {
-    let history: [Double]   // values 0...1
-
-    var body: some View {
-        Canvas { ctx, size in
-            guard history.count > 1 else { return }
-            let w = size.width, h = size.height
-            let n = history.count
-            var line = Path()
-            for (i, v) in history.enumerated() {
-                let x = w * CGFloat(i) / CGFloat(n - 1)
-                let y = h - CGFloat(min(1, max(0, v))) * h
-                if i == 0 { line.move(to: CGPoint(x: x, y: y)) }
-                else { line.addLine(to: CGPoint(x: x, y: y)) }
-            }
-            var area = line
-            area.addLine(to: CGPoint(x: w, y: h))
-            area.addLine(to: CGPoint(x: 0, y: h))
-            area.closeSubpath()
-
-            ctx.fill(area, with: .linearGradient(
-                Gradient(colors: [Theme.accent.opacity(0.38), Theme.accent.opacity(0)]),
-                startPoint: CGPoint(x: 0, y: 0),
-                endPoint: CGPoint(x: 0, y: h)))
-            ctx.stroke(line, with: .color(Theme.accent),
-                       style: StrokeStyle(lineWidth: 1.5, lineCap: .round, lineJoin: .round))
-        }
-        .frame(height: 70)
-        .background(Color.white.opacity(0.03))
-        .clipShape(RoundedRectangle(cornerRadius: 8))
-    }
-}
-
-// MARK: - Collapsed idle hint
-
-/// The mini live hint shown in the collapsed notch: orange CPU mini-bars + the
-/// current CPU percentage, sitting to the right of the camera.
-struct CollapsedHints: View {
-    @ObservedObject var stats: SystemStatsService
-
-    private var lastBars: [Double] {
-        let h = stats.metrics.cpuHistory
-        return Array(h.suffix(5))
-    }
-
-    var body: some View {
-        HStack(spacing: 0) {
-            Spacer(minLength: 0)
-            HStack(spacing: 7) {
-                HStack(alignment: .bottom, spacing: 2) {
-                    ForEach(Array(lastBars.enumerated()), id: \.offset) { _, v in
-                        Capsule()
-                            .fill(Theme.accent)
-                            .frame(width: 2, height: 3 + CGFloat(min(1, max(0, v))) * 11)
-                    }
-                }
-                .frame(height: 14)
-                Text("\(Int((stats.metrics.cpu * 100).rounded()))%")
-                    .font(.system(size: 11, design: .monospaced))
-                    .monospacedDigit()
-                    .foregroundStyle(.white)
-            }
-        }
-        .padding(.horizontal, 16)
     }
 }

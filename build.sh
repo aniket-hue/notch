@@ -4,6 +4,8 @@
 #
 #   ./build.sh         build + assemble + sign
 #   ./build.sh run     ...and then (re)launch the app
+#   ./build.sh install ...and copy to /Applications, then launch (best for
+#                         "Open at Login", which needs a stable app location)
 #
 set -euo pipefail
 
@@ -28,9 +30,10 @@ mkdir -p "${APP}/Contents/Resources"
 cp "${BIN_PATH}" "${APP}/Contents/MacOS/${APP_NAME}"
 cp "${RES}/Info.plist" "${APP}/Contents/Info.plist"
 
-# Copy any bundled runtime resources (Now Playing adapter, etc.) if present.
-if [ -d "${RES}/Adapter" ]; then
-    cp -R "${RES}/Adapter/." "${APP}/Contents/Resources/"
+# Bundle the Now Playing media bridge (perl script + framework) into Resources.
+if [ -d "Vendor/mediaremote-adapter" ]; then
+    cp -R "Vendor/mediaremote-adapter/MediaRemoteAdapter.framework" "${APP}/Contents/Resources/"
+    cp "Vendor/mediaremote-adapter/mediaremote-adapter.pl" "${APP}/Contents/Resources/"
 fi
 
 echo "▶︎ Ad-hoc signing…"
@@ -43,7 +46,15 @@ codesign --force --deep --sign - "${APP}"   # fallback without hardened runtime
 
 echo "✓ Built ${APP}"
 
-if [ "${1:-}" == "run" ]; then
+if [ "${1:-}" == "install" ]; then
+    echo "▶︎ Installing to /Applications…"
+    pkill -x "${APP_NAME}" 2>/dev/null || true
+    sleep 0.3
+    rm -rf "/Applications/${APP}"
+    cp -R "${APP}" "/Applications/${APP}"
+    open "/Applications/${APP}"
+    echo "✓ Installed and launched from /Applications. Toggle 'Open at Login' from the menu-bar icon."
+elif [ "${1:-}" == "run" ]; then
     echo "▶︎ Relaunching…"
     pkill -x "${APP_NAME}" 2>/dev/null || true
     sleep 0.3
