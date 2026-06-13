@@ -1,48 +1,54 @@
 import AppKit
 
 struct NotchGeometry {
-
     let closedWidth: CGFloat
-
     let closedHeight: CGFloat
-
     let hasHardwareNotch: Bool
-
     let screen: NSScreen
-
-    var openSize: CGSize { CGSize(width: 544, height: 184) }
+    let openSize: CGSize
 }
 
 enum ScreenGeometry {
 
-    static func current() -> NotchGeometry {
+    static func current(rowSize: CGSize) -> NotchGeometry {
         let screen = NSScreen.screens.first(where: { $0.safeAreaInsets.top > 0 })
             ?? NSScreen.main
             ?? NSScreen.screens.first!
 
         let topInset = screen.safeAreaInsets.top
 
-        if topInset > 0 {
+        let closedWidth: CGFloat
+        let closedHeight: CGFloat
+        let hasNotch: Bool
 
+        if topInset > 0 {
             let fullWidth = screen.frame.width
             let leftWidth = screen.auxiliaryTopLeftArea?.width ?? 0
             let rightWidth = screen.auxiliaryTopRightArea?.width ?? 0
             var notchWidth = fullWidth - leftWidth - rightWidth
-
             if notchWidth <= 0 || notchWidth > fullWidth * 0.5 {
                 notchWidth = 200
             }
-
-            return NotchGeometry(closedWidth: notchWidth,
-                                 closedHeight: topInset,
-                                 hasHardwareNotch: true,
-                                 screen: screen)
+            closedWidth = notchWidth
+            closedHeight = topInset
+            hasNotch = true
         } else {
-
-            return NotchGeometry(closedWidth: 320,
-                                 closedHeight: 32,
-                                 hasHardwareNotch: false,
-                                 screen: screen)
+            closedWidth = 320
+            closedHeight = 32
+            hasNotch = false
         }
+
+        let openSize = CGSize(
+            width: rowSize.width + LayoutMetrics.hPadding * 2,
+            height: closedHeight + rowSize.height + LayoutMetrics.bottomPadding + LayoutMetrics.topGap
+        )
+
+        return NotchGeometry(
+            closedWidth: closedWidth,
+            closedHeight: closedHeight,
+            hasHardwareNotch: hasNotch,
+            screen: screen,
+            openSize: openSize
+        )
     }
 }

@@ -13,10 +13,10 @@ struct SystemStatsView: View {
     private let gpuColor = Color(red: 1.0, green: 0.72, blue: 0.36)
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 9) {
+        VStack(alignment: .leading, spacing: 6) {
             legend
             graph
-            VStack(spacing: 6) {
+            VStack(spacing: 4) {
                 row("Network", "↓ \(mbps(m.netDown))  ↑ \(mbps(m.netUp)) MB/s")
                 if m.hasBattery {
                     row("Battery", "\(pct(m.batteryLevel))%\(m.charging ? " ⚡︎" : "")")
@@ -76,7 +76,7 @@ struct SystemStatsView: View {
                 }
             }
         }
-        .frame(height: 50)
+        .frame(height: 40)
         .background(Color.white.opacity(0.04))
         .clipShape(RoundedRectangle(cornerRadius: 8))
     }

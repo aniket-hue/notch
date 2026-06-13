@@ -10,15 +10,20 @@ final class NotchWindowController {
     private var hoverMonitor: HoverMonitor!
     private let stats = SystemStatsService()
     private let nowPlaying = NowPlayingService()
+    private let clipboard = ClipboardService()
+    private let registry: WidgetRegistry
+    private let pages = LayoutConfig.pages
 
     private let hMargin: CGFloat = 44
     private let bMargin: CGFloat = 52
 
     init() {
-        let geometry = ScreenGeometry.current()
+        self.registry = WidgetRegistry(stats: stats, nowPlaying: nowPlaying, clipboard: clipboard)
+        let geometry = ScreenGeometry.current(rowSize: NotchWindowController.contentSize(registry, pages))
         self.viewModel = NotchViewModel(geometry: geometry)
         stats.start()
         nowPlaying.start()
+        clipboard.start()
         buildPanel()
         hoverMonitor = HoverMonitor(viewModel: viewModel, panel: panel)
 
@@ -28,6 +33,11 @@ final class NotchWindowController {
             name: NSApplication.didChangeScreenParametersNotification,
             object: nil
         )
+    }
+
+    private static func contentSize(_ registry: WidgetRegistry, _ pages: [LayoutConfig]) -> CGSize {
+        let s = LayoutMetrics.pageSize(registry, pages)
+        return CGSize(width: s.width, height: s.height + LayoutMetrics.dotsHeight)
     }
 
     func show() {
@@ -42,7 +52,7 @@ final class NotchWindowController {
         container.frame = NSRect(origin: .zero, size: frame.size)
         container.autoresizingMask = [.width, .height]
 
-        let hosting = NSHostingView(rootView: NotchView(viewModel: viewModel, stats: stats, nowPlaying: nowPlaying))
+        let hosting = NSHostingView(rootView: NotchView(viewModel: viewModel, registry: registry, pages: pages))
         hosting.frame = container.bounds
         hosting.autoresizingMask = [.width, .height]
         if #available(macOS 13.0, *) {
@@ -65,7 +75,7 @@ final class NotchWindowController {
     }
 
     @objc private func screenParametersChanged() {
-        viewModel.geometry = ScreenGeometry.current()
+        viewModel.geometry = ScreenGeometry.current(rowSize: NotchWindowController.contentSize(registry, pages))
         panel.setFrame(fixedFrame(), display: true)
     }
 }
@@ -82,7 +92,6 @@ final class NotchContainerView: NSView {
 
     override func hitTest(_ point: NSPoint) -> NSView? {
         let size = MainActor.assumeIsolated { viewModel.currentShapeSize }
-
         let rect = NSRect(
             x: (bounds.width - size.width) / 2,
             y: bounds.height - size.height,

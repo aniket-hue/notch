@@ -1,19 +1,38 @@
 import SwiftUI
 
 struct NotchShape: Shape {
+    var topCornerRadius: CGFloat = 10
     var bottomCornerRadius: CGFloat = 14
 
+    var animatableData: AnimatablePair<CGFloat, CGFloat> {
+        get { AnimatablePair(topCornerRadius, bottomCornerRadius) }
+        set {
+            topCornerRadius = newValue.first
+            bottomCornerRadius = newValue.second
+        }
+    }
+
     func path(in rect: CGRect) -> Path {
-        let r = min(bottomCornerRadius, rect.height / 2, rect.width / 2)
+        let t = min(topCornerRadius, rect.width / 2, rect.height / 2)
+        let b = min(bottomCornerRadius, rect.width / 2, rect.height / 2)
+
         var p = Path()
         p.move(to: CGPoint(x: rect.minX, y: rect.minY))
-        p.addLine(to: CGPoint(x: rect.maxX, y: rect.minY))
-        p.addLine(to: CGPoint(x: rect.maxX, y: rect.maxY - r))
-        p.addArc(center: CGPoint(x: rect.maxX - r, y: rect.maxY - r),
-                 radius: r, startAngle: .degrees(0), endAngle: .degrees(90), clockwise: false)
-        p.addLine(to: CGPoint(x: rect.minX + r, y: rect.maxY))
-        p.addArc(center: CGPoint(x: rect.minX + r, y: rect.maxY - r),
-                 radius: r, startAngle: .degrees(90), endAngle: .degrees(180), clockwise: false)
+        p.addQuadCurve(
+            to: CGPoint(x: rect.minX + t, y: rect.minY + t),
+            control: CGPoint(x: rect.minX + t, y: rect.minY))
+        p.addLine(to: CGPoint(x: rect.minX + t, y: rect.maxY - b))
+        p.addQuadCurve(
+            to: CGPoint(x: rect.minX + t + b, y: rect.maxY),
+            control: CGPoint(x: rect.minX + t, y: rect.maxY))
+        p.addLine(to: CGPoint(x: rect.maxX - t - b, y: rect.maxY))
+        p.addQuadCurve(
+            to: CGPoint(x: rect.maxX - t, y: rect.maxY - b),
+            control: CGPoint(x: rect.maxX - t, y: rect.maxY))
+        p.addLine(to: CGPoint(x: rect.maxX - t, y: rect.minY + t))
+        p.addQuadCurve(
+            to: CGPoint(x: rect.maxX, y: rect.minY),
+            control: CGPoint(x: rect.maxX - t, y: rect.minY))
         p.closeSubpath()
         return p
     }

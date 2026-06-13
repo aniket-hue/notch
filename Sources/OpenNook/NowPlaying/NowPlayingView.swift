@@ -67,7 +67,7 @@ struct NowPlayingView: View {
     }
 
     private func circle(_ np: NowPlaying, fraction: Double) -> some View {
-        let inner = diameter - ring * 2 - 4
+        let inner = diameter - ring * 2
         return ZStack {
 
             Group {

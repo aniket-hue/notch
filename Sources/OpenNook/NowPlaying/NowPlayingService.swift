@@ -113,7 +113,7 @@ final class NowPlayingService: ObservableObject {
         now = n
     }
 
-    private static func parse(_ data: Data) -> ParsedTrack? {
+    private nonisolated static func parse(_ data: Data) -> ParsedTrack? {
         guard let obj = try? JSONSerialization.jsonObject(with: data) else { return nil }
         guard let dict = obj as? [String: Any] else {
             return ParsedTrack(cleared: true)

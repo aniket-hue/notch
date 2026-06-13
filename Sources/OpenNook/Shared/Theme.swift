@@ -13,4 +13,6 @@ enum Theme {
     static let barFill = Color.white.opacity(0.5)
 
     static let monoValue = Font.system(size: 12, design: .monospaced)
+    
+    static let black = Color.black
 }
