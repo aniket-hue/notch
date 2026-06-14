@@ -19,7 +19,9 @@ struct LRUCache<Key: Hashable, Value> {
         order.compactMap { store[$0] }
     }
 
-    var isEmpty: Bool { order.isEmpty }
+    var isEmpty: Bool {
+        order.isEmpty
+    }
 
     func value(for key: Key) -> Value? {
         store[key]

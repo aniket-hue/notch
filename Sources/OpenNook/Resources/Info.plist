@@ -23,5 +23,9 @@
     <true/>
     <key>NSHumanReadableCopyright</key>
     <string>OpenNook — personal build</string>
+    <key>NSCalendarsFullAccessUsageDescription</key>
+    <string>OpenNook shows your upcoming events in the notch.</string>
+    <key>NSCalendarsUsageDescription</key>
+    <string>OpenNook shows your upcoming events in the notch.</string>
 </dict>
 </plist>

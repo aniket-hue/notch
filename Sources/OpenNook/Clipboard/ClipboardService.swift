@@ -13,7 +13,6 @@ struct ClipItem: Identifiable, Equatable {
 
 @MainActor
 final class ClipboardService: ObservableObject {
-
     @Published private(set) var items: [ClipItem] = []
 
     private var cache: LRUCache<String, ClipItem>

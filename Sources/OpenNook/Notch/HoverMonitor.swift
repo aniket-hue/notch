@@ -2,7 +2,6 @@ import AppKit
 
 @MainActor
 final class HoverMonitor {
-
     private let viewModel: NotchViewModel
     private weak var panel: NSPanel?
     private var globalMonitor: Any?
@@ -15,7 +14,6 @@ final class HoverMonitor {
     }
 
     private func start() {
-
         globalMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.mouseMoved]) { [weak self] _ in
             guard let self else { return }
             MainActor.assumeIsolated { self.evaluate() }
@@ -33,12 +31,10 @@ final class HoverMonitor {
         let f = geo.screen.frame
 
         if viewModel.isOpen {
-
             let w = geo.openSize.width, h = geo.openSize.height
             let m: CGFloat = 26
             return CGRect(x: f.midX - w / 2 - m, y: f.maxY - h - m, width: w + 2 * m, height: h + m)
         } else {
-
             let w = geo.closedWidth, h = geo.closedHeight
             let mx: CGFloat = 18, my: CGFloat = 16
             return CGRect(x: f.midX - w / 2 - mx, y: f.maxY - h - my, width: w + 2 * mx, height: h + my)

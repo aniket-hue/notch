@@ -13,9 +13,9 @@ struct NowPlaying: Equatable {
 
     static func == (l: NowPlaying, r: NowPlaying) -> Bool {
         l.hasTrack == r.hasTrack && l.title == r.title && l.artist == r.artist &&
-        l.album == r.album && l.isPlaying == r.isPlaying && l.duration == r.duration &&
-        l.elapsedAtAnchor == r.elapsedAtAnchor && l.anchorEpoch == r.anchorEpoch &&
-        l.artwork === r.artwork
+            l.album == r.album && l.isPlaying == r.isPlaying && l.duration == r.duration &&
+            l.elapsedAtAnchor == r.elapsedAtAnchor && l.anchorEpoch == r.anchorEpoch &&
+            l.artwork === r.artwork
     }
 
     func elapsed(at epoch: Double) -> Double {
@@ -25,7 +25,7 @@ struct NowPlaying: Equatable {
     }
 }
 
-private struct ParsedTrack: Sendable {
+private struct ParsedTrack {
     var cleared = false
     var title = ""
     var artist = ""
@@ -39,7 +39,6 @@ private struct ParsedTrack: Sendable {
 
 @MainActor
 final class NowPlayingService: ObservableObject {
-
     @Published private(set) var now = NowPlaying()
     @Published private(set) var available = false
 
@@ -47,8 +46,8 @@ final class NowPlayingService: ObservableObject {
     private let fwPath: String
     private var process: Process?
     private let parseQueue = DispatchQueue(label: "opennook.nowplaying.parse")
-    nonisolated(unsafe) private var buffer = Data()
-    nonisolated(unsafe) private static let iso = ISO8601DateFormatter()
+    private nonisolated(unsafe) var buffer = Data()
+    private nonisolated(unsafe) static let iso = ISO8601DateFormatter()
 
     init() {
         let res = Bundle.main.resourceURL
@@ -71,11 +70,11 @@ final class NowPlayingService: ObservableObject {
         outPipe.fileHandleForReading.readabilityHandler = { [weak self] handle in
             let data = handle.availableData
             guard let self, !data.isEmpty else { return }
-            self.parseQueue.async {
+            parseQueue.async {
                 self.buffer.append(data)
                 while let nl = self.buffer.firstIndex(of: 0x0A) {
-                    let line = self.buffer.subdata(in: self.buffer.startIndex..<nl)
-                    self.buffer.removeSubrange(self.buffer.startIndex...nl)
+                    let line = self.buffer.subdata(in: self.buffer.startIndex ..< nl)
+                    self.buffer.removeSubrange(self.buffer.startIndex ... nl)
                     guard let parsed = Self.parse(line) else { continue }
                     Task { @MainActor [weak self] in self?.apply(parsed) }
                 }
@@ -140,7 +139,6 @@ final class NowPlayingService: ObservableObject {
     }
 
     func togglePlayPause() {
-
         var n = now
         let live = n.elapsed(at: Date().timeIntervalSince1970)
         n.isPlaying.toggle()

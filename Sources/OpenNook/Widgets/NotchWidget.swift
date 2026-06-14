@@ -11,7 +11,9 @@ protocol NotchWidget {
 struct LayoutItem: Codable, Identifiable {
     var widgetID: String
     var enabled: Bool = true
-    var id: String { widgetID }
+    var id: String {
+        widgetID
+    }
 }
 
 struct LayoutConfig: Codable {
@@ -24,6 +26,9 @@ struct LayoutConfig: Codable {
         ]),
         LayoutConfig(items: [
             LayoutItem(widgetID: "clipboard"),
+        ]),
+        LayoutConfig(items: [
+            LayoutItem(widgetID: "calendar"),
         ]),
     ]
 

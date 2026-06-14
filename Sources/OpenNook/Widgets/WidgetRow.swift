@@ -13,7 +13,7 @@ struct WidgetRow: View {
                 if index > 0 {
                     LinearGradient(
                         colors: [.white.opacity(0), .white.opacity(0.12), .white.opacity(0)],
-                        startPoint: .top, endPoint: .bottom
+                        startPoint: .top, endPoint: .bottom,
                     )
                     .frame(width: LayoutMetrics.dividerWidth, height: dividerHeight * 0.82)
                 }

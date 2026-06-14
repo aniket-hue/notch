@@ -12,7 +12,8 @@ let package = Package(
             path: "Sources/OpenNook",
             exclude: [
                 "Resources/Info.plist",
-                "Resources/OpenNook.entitlements"
+                "Resources/OpenNook.entitlements",
+                "Resources/Icons"
             ],
             swiftSettings: [
                 .swiftLanguageMode(.v5)

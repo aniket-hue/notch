@@ -2,11 +2,10 @@ import AppKit
 
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
-
     private var statusItem: NSStatusItem?
     private var notchController: NotchWindowController?
 
-    func applicationDidFinishLaunching(_ notification: Notification) {
+    func applicationDidFinishLaunching(_: Notification) {
         setupStatusItem()
         notchController = NotchWindowController()
         notchController?.show()
@@ -15,9 +14,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
     private func setupStatusItem() {
         let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         if let button = item.button {
-            button.image = NSImage(systemSymbolName: "rectangle.topthird.inset.filled",
-                                   accessibilityDescription: "OpenNook")
-            button.image?.isTemplate = true
+            button.image = Icon.menuBarImage()
         }
 
         let menu = NSMenu()
@@ -40,7 +37,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         menu.addItem(quit)
 
         item.menu = menu
-        self.statusItem = item
+        statusItem = item
     }
 
     @objc private func openSettings() {

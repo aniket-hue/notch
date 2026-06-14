@@ -29,6 +29,7 @@ mkdir -p "${APP}/Contents/Resources"
 
 cp "${BIN_PATH}" "${APP}/Contents/MacOS/${APP_NAME}"
 cp "${RES}/Info.plist" "${APP}/Contents/Info.plist"
+cp -R "${RES}/Icons" "${APP}/Contents/Resources/Icons"
 
 # Bundle the Now Playing media bridge (perl script + framework) into Resources.
 if [ -d "Vendor/mediaremote-adapter" ]; then
@@ -40,9 +41,8 @@ echo "▶︎ Ad-hoc signing…"
 codesign --force --deep \
     --sign - \
     --entitlements "${RES}/OpenNook.entitlements" \
-    --options runtime \
     "${APP}" >/dev/null 2>&1 || \
-codesign --force --deep --sign - "${APP}"   # fallback without hardened runtime
+codesign --force --deep --sign - "${APP}"
 
 echo "✓ Built ${APP}"
 

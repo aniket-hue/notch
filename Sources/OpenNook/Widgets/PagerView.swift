@@ -7,8 +7,13 @@ struct PagerView: View {
 
     @State private var scrolledID: Int?
 
-    private var pageSize: CGSize { LayoutMetrics.pageSize(registry, pages) }
-    private var current: Int { scrolledID ?? 0 }
+    private var pageSize: CGSize {
+        LayoutMetrics.pageSize(registry, pages)
+    }
+
+    private var current: Int {
+        scrolledID ?? 0
+    }
 
     var body: some View {
         let size = pageSize

@@ -1,9 +1,8 @@
-import SwiftUI
 import Combine
+import SwiftUI
 
 @MainActor
 final class NotchViewModel: ObservableObject {
-
     enum State {
         case closed
         case open
@@ -18,7 +17,9 @@ final class NotchViewModel: ObservableObject {
         self.geometry = geometry
     }
 
-    var isOpen: Bool { state == .open }
+    var isOpen: Bool {
+        state == .open
+    }
 
     private var springAnimation: Animation {
         .spring(response: 0.34, dampingFraction: 0.86)
@@ -37,8 +38,8 @@ final class NotchViewModel: ObservableObject {
         guard state != .closed, closeWorkItem == nil else { return }
         let work = DispatchWorkItem { [weak self] in
             guard let self else { return }
-            self.closeWorkItem = nil
-            withAnimation(self.springAnimation) {
+            closeWorkItem = nil
+            withAnimation(springAnimation) {
                 self.state = .closed
             }
         }
@@ -49,9 +50,9 @@ final class NotchViewModel: ObservableObject {
     var currentShapeSize: CGSize {
         switch state {
         case .closed:
-            return CGSize(width: geometry.closedWidth, height: geometry.closedHeight)
+            CGSize(width: geometry.closedWidth, height: geometry.closedHeight)
         case .open:
-            return geometry.openSize
+            geometry.openSize
         }
     }
 }

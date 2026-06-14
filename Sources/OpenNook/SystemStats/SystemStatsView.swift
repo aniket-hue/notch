@@ -5,8 +5,13 @@ struct SystemStatsView: View {
 
     @State private var hoverFrac: Double?
 
-    private var m: Metrics { stats.metrics }
-    private var memFrac: Double { m.memTotal > 0 ? Double(m.memUsed) / Double(m.memTotal) : 0 }
+    private var m: Metrics {
+        stats.metrics
+    }
+
+    private var memFrac: Double {
+        m.memTotal > 0 ? Double(m.memUsed) / Double(m.memTotal) : 0
+    }
 
     private let cpuColor = Color(red: 0.36, green: 0.62, blue: 1.0)
     private let memColor = Color(red: 0.30, green: 0.86, blue: 0.52)
@@ -71,7 +76,7 @@ struct SystemStatsView: View {
             .contentShape(Rectangle())
             .onContinuousHover { phase in
                 switch phase {
-                case .active(let p): hoverFrac = min(1, max(0, p.x / geo.size.width))
+                case let .active(p): hoverFrac = min(1, max(0, p.x / geo.size.width))
                 case .ended: hoverFrac = nil
                 }
             }
@@ -108,8 +113,7 @@ struct SystemStatsView: View {
     }
 
     private func value(_ data: [Double], fallback: Double) -> Int {
-        let v: Double
-        if let i = hoverIndex, data.indices.contains(i) { v = data[i] } else { v = fallback }
+        let v: Double = if let i = hoverIndex, data.indices.contains(i) { data[i] } else { fallback }
         return Int((v * 100).rounded())
     }
 
@@ -117,6 +121,7 @@ struct SystemStatsView: View {
     private func mbps(_ bytesPerSec: Double) -> String {
         String(format: "%.1f", bytesPerSec / 1_000_000)
     }
+
     private func uptime(_ t: TimeInterval) -> String {
         let total = Int(t)
         let d = total / 86400, h = (total % 86400) / 3600, min = (total % 3600) / 60

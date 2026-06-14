@@ -4,7 +4,6 @@ import SwiftUI
 
 @MainActor
 final class NotchWindowController {
-
     private var panel: NotchPanel!
     private let viewModel: NotchViewModel
     private var container: NotchContainerView!
@@ -12,25 +11,29 @@ final class NotchWindowController {
     private let stats = SystemStatsService()
     private let nowPlaying = NowPlayingService()
     private let clipboard = ClipboardService()
+    private let calendar = CalendarService()
     private let registry: WidgetRegistry
     private let settings = Settings()
     private lazy var settingsWindow = SettingsWindowController(settings: settings, registry: registry, clipboard: clipboard)
     private var cancellables: Set<AnyCancellable> = []
 
-    private var pages: [LayoutConfig] { LayoutConfig.visible(hidden: settings.hiddenWidgets) }
+    private var pages: [LayoutConfig] {
+        LayoutConfig.visible(hidden: settings.hiddenWidgets)
+    }
 
     private let hMargin: CGFloat = 44
     private let bMargin: CGFloat = 52
 
     init() {
-        self.registry = WidgetRegistry(stats: stats, nowPlaying: nowPlaying, clipboard: clipboard)
+        registry = WidgetRegistry(stats: stats, nowPlaying: nowPlaying, clipboard: clipboard, calendar: calendar)
         let initialPages = LayoutConfig.visible(hidden: settings.hiddenWidgets)
         let geometry = ScreenGeometry.current(rowSize: NotchWindowController.contentSize(registry, initialPages))
-        self.viewModel = NotchViewModel(geometry: geometry)
+        viewModel = NotchViewModel(geometry: geometry)
         clipboard.setLimit(settings.clipboardLimit)
         stats.start()
         nowPlaying.start()
         clipboard.start()
+        calendar.start()
         buildPanel()
         hoverMonitor = HoverMonitor(viewModel: viewModel, panel: panel)
         observeSettings()
@@ -39,7 +42,7 @@ final class NotchWindowController {
             self,
             selector: #selector(screenParametersChanged),
             name: NSApplication.didChangeScreenParametersNotification,
-            object: nil
+            object: nil,
         )
     }
 
@@ -91,7 +94,7 @@ final class NotchWindowController {
             viewModel: viewModel,
             settings: settings,
             registry: registry,
-            onOpenSettings: { [weak self] in self?.openSettings() }
+            onOpenSettings: { [weak self] in self?.openSettings() },
         ))
         hosting.frame = container.bounds
         hosting.autoresizingMask = [.width, .height]
@@ -128,7 +131,8 @@ final class NotchContainerView: NSView {
         super.init(frame: .zero)
     }
 
-    required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+    @available(*, unavailable)
+    required init?(coder _: NSCoder) { fatalError("init(coder:) has not been implemented") }
 
     override func hitTest(_ point: NSPoint) -> NSView? {
         let size = MainActor.assumeIsolated { viewModel.currentShapeSize }
@@ -136,7 +140,7 @@ final class NotchContainerView: NSView {
             x: (bounds.width - size.width) / 2,
             y: bounds.height - size.height,
             width: size.width,
-            height: size.height
+            height: size.height,
         )
         guard rect.contains(point) else { return nil }
         return super.hitTest(point)

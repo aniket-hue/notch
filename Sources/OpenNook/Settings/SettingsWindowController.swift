@@ -17,7 +17,7 @@ final class SettingsWindowController {
     func show() {
         if window == nil {
             let hosting = NSHostingController(
-                rootView: SettingsView(settings: settings, registry: registry, clipboard: clipboard)
+                rootView: SettingsView(settings: settings, registry: registry, clipboard: clipboard),
             )
             let w = NSWindow(contentViewController: hosting)
             w.title = "OpenNook Settings"

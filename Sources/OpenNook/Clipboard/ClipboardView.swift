@@ -47,18 +47,18 @@ struct ClipboardView: View {
                 .background(Capsule().fill(.white.opacity(0.08)))
             Spacer()
             if maxOffset > 0 {
-                navButton("chevron.left", enabled: offset > 1) {
+                navButton(.chevronLeft, enabled: offset > 1) {
                     withAnimation(.easeOut(duration: 0.25)) { offset = max(0, offset - viewport * 0.8) }
                 }
-                navButton("chevron.right", enabled: offset < maxOffset - 1) {
+                navButton(.chevronRight, enabled: offset < maxOffset - 1) {
                     withAnimation(.easeOut(duration: 0.25)) { offset = min(maxOffset, offset + viewport * 0.8) }
                 }
             }
             if !service.items.isEmpty {
                 Button { service.clear() } label: {
-                    Image(systemName: "trash")
-                        .font(.system(size: 9))
+                    Icon(.trash, size: 13, weight: 1.7)
                         .foregroundStyle(Theme.textTertiary)
+                        .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
                 .padding(.leading, 4)
@@ -66,10 +66,9 @@ struct ClipboardView: View {
         }
     }
 
-    private func navButton(_ name: String, enabled: Bool, _ action: @escaping () -> Void) -> some View {
+    private func navButton(_ icon: OIcon, enabled: Bool, _ action: @escaping () -> Void) -> some View {
         Button(action: action) {
-            Image(systemName: name)
-                .font(.system(size: 10, weight: .bold))
+            Icon(icon, size: 11, weight: 2)
                 .foregroundStyle(.white.opacity(enabled ? 0.8 : 0.2))
                 .frame(width: 20, height: 18)
                 .background(RoundedRectangle(cornerRadius: 5).fill(.white.opacity(enabled ? 0.1 : 0.03)))
@@ -81,8 +80,7 @@ struct ClipboardView: View {
 
     private var emptyState: some View {
         VStack(spacing: 7) {
-            Image(systemName: "doc.on.clipboard")
-                .font(.system(size: 20))
+            Icon(.clipboard, size: 22, weight: 1.8)
                 .foregroundStyle(.white.opacity(0.18))
             Text("Nothing copied yet")
                 .font(.system(size: 11, design: .rounded))
@@ -106,8 +104,7 @@ struct ClipboardView: View {
                     preview(item, hovered: hovered)
                     if copied {
                         Color.black.opacity(0.5)
-                        Image(systemName: "checkmark")
-                            .font(.system(size: 15, weight: .bold))
+                        Icon(.check, size: 18, weight: 2.4)
                             .foregroundStyle(settings.accentColor)
                     }
                 }

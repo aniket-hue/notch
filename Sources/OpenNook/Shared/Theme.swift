@@ -1,7 +1,6 @@
 import SwiftUI
 
 enum Theme {
-
     static let accent = Color(red: 1.0, green: 0.33, blue: 0.62)
 
     static let textPrimary = Color.white
@@ -13,6 +12,6 @@ enum Theme {
     static let barFill = Color.white.opacity(0.5)
 
     static let monoValue = Font.system(size: 12, design: .monospaced)
-    
+
     static let black = Color.black
 }

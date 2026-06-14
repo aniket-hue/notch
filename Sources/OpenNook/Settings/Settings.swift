@@ -2,22 +2,29 @@ import SwiftUI
 
 enum Appearance: String, CaseIterable, Identifiable {
     case glass, solid
-    var id: String { rawValue }
-    var label: String { self == .glass ? "Glass" : "Solid" }
+    var id: String {
+        rawValue
+    }
+
+    var label: String {
+        self == .glass ? "Glass" : "Solid"
+    }
 }
 
 enum AccentChoice: String, CaseIterable, Identifiable {
     case pink, blue, green, orange, purple, mono
-    var id: String { rawValue }
+    var id: String {
+        rawValue
+    }
 
     var color: Color {
         switch self {
-        case .pink: return Color(red: 1.0, green: 0.33, blue: 0.62)
-        case .blue: return Color(red: 0.36, green: 0.62, blue: 1.0)
-        case .green: return Color(red: 0.30, green: 0.86, blue: 0.52)
-        case .orange: return Color(red: 1.0, green: 0.55, blue: 0.26)
-        case .purple: return Color(red: 0.69, green: 0.45, blue: 1.0)
-        case .mono: return Color.white
+        case .pink: Color(red: 1.0, green: 0.33, blue: 0.62)
+        case .blue: Color(red: 0.36, green: 0.62, blue: 1.0)
+        case .green: Color(red: 0.30, green: 0.86, blue: 0.52)
+        case .orange: Color(red: 1.0, green: 0.55, blue: 0.26)
+        case .purple: Color(red: 0.69, green: 0.45, blue: 1.0)
+        case .mono: Color.white
         }
     }
 }
@@ -27,20 +34,26 @@ final class Settings: ObservableObject {
     @Published var appearance: Appearance {
         didSet { defaults.set(appearance.rawValue, forKey: Keys.appearance) }
     }
+
     @Published var accent: AccentChoice {
         didSet { defaults.set(accent.rawValue, forKey: Keys.accent) }
     }
+
     @Published var glassTint: Double {
         didSet { defaults.set(glassTint, forKey: Keys.glassTint) }
     }
+
     @Published var clipboardLimit: Int {
         didSet { defaults.set(clipboardLimit, forKey: Keys.clipboardLimit) }
     }
+
     @Published var hiddenWidgets: Set<String> {
         didSet { defaults.set(Array(hiddenWidgets), forKey: Keys.hiddenWidgets) }
     }
 
-    var accentColor: Color { accent.color }
+    var accentColor: Color {
+        accent.color
+    }
 
     func isWidgetEnabled(_ id: String) -> Bool { !hiddenWidgets.contains(id) }
     func setWidget(_ id: String, enabled: Bool) {

@@ -8,15 +8,15 @@ struct SettingsView: View {
     var body: some View {
         TabView {
             GeneralTab()
-                .tabItem { Label("General", systemImage: "gearshape") }
+                .tabItem { Label { Text("General") } icon: { Icon(.settings, size: 15) } }
             AppearanceTab(settings: settings)
-                .tabItem { Label("Appearance", systemImage: "paintbrush") }
+                .tabItem { Label { Text("Appearance") } icon: { Icon(.appearance, size: 15) } }
             WidgetsTab(settings: settings, registry: registry)
-                .tabItem { Label("Widgets", systemImage: "square.grid.2x2") }
+                .tabItem { Label { Text("Widgets") } icon: { Icon(.widgets, size: 15) } }
             ClipboardTab(settings: settings, clipboard: clipboard)
-                .tabItem { Label("Clipboard", systemImage: "doc.on.clipboard") }
+                .tabItem { Label { Text("Clipboard") } icon: { Icon(.clipboard, size: 15) } }
             AboutTab()
-                .tabItem { Label("About", systemImage: "info.circle") }
+                .tabItem { Label { Text("About") } icon: { Icon(.info, size: 15) } }
         }
         .frame(width: 480, height: 360)
     }
@@ -55,7 +55,7 @@ private struct AppearanceTab: View {
                 .pickerStyle(.segmented)
 
                 if settings.appearance == .glass {
-                    Slider(value: $settings.glassTint, in: 0...0.5) {
+                    Slider(value: $settings.glassTint, in: 0 ... 0.5) {
                         Text("Tint")
                     } minimumValueLabel: {
                         Text("Clear").font(.caption2).foregroundStyle(.secondary)
@@ -77,7 +77,7 @@ private struct AppearanceTab: View {
                                 .overlay(
                                     Circle()
                                         .strokeBorder(.primary.opacity(settings.accent == choice ? 0.9 : 0), lineWidth: 2)
-                                        .padding(-3)
+                                        .padding(-3),
                                 )
                         }
                         .buttonStyle(.plain)
@@ -101,7 +101,7 @@ private struct WidgetsTab: View {
                 ForEach(registry.availableIDs, id: \.self) { id in
                     Toggle(registry.title(for: id), isOn: Binding(
                         get: { settings.isWidgetEnabled(id) },
-                        set: { settings.setWidget(id, enabled: $0) }
+                        set: { settings.setWidget(id, enabled: $0) },
                     ))
                 }
             } header: {
@@ -133,9 +133,9 @@ private struct ClipboardTab: View {
                     Slider(
                         value: Binding(
                             get: { Double(settings.clipboardLimit) },
-                            set: { settings.clipboardLimit = Int($0) }
+                            set: { settings.clipboardLimit = Int($0) },
                         ),
-                        in: 10...100, step: 5
+                        in: 10 ... 100, step: 5,
                     )
                 }
             } footer: {
@@ -165,8 +165,7 @@ private struct AboutTab: View {
 
     var body: some View {
         VStack(spacing: 10) {
-            Image(systemName: "rectangle.topthird.inset.filled")
-                .font(.system(size: 46))
+            Icon(.logo, size: 46)
                 .foregroundStyle(.secondary)
             Text("OpenNook")
                 .font(.title2.weight(.semibold))

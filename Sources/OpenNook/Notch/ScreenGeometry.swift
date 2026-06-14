@@ -9,7 +9,6 @@ struct NotchGeometry {
 }
 
 enum ScreenGeometry {
-
     static func current(rowSize: CGSize) -> NotchGeometry {
         let screen = NSScreen.screens.first(where: { $0.safeAreaInsets.top > 0 })
             ?? NSScreen.main
@@ -40,7 +39,7 @@ enum ScreenGeometry {
 
         let openSize = CGSize(
             width: rowSize.width + LayoutMetrics.hPadding * 2,
-            height: closedHeight + rowSize.height + LayoutMetrics.bottomPadding + LayoutMetrics.topGap
+            height: closedHeight + rowSize.height + LayoutMetrics.bottomPadding + LayoutMetrics.topGap,
         )
 
         return NotchGeometry(
@@ -48,7 +47,7 @@ enum ScreenGeometry {
             closedHeight: closedHeight,
             hasHardwareNotch: hasNotch,
             screen: screen,
-            openSize: openSize
+            openSize: openSize,
         )
     }
 }

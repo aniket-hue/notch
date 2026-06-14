@@ -1,5 +1,5 @@
-import Foundation
 import Darwin
+import Foundation
 import IOKit
 import IOKit.ps
 
@@ -23,7 +23,6 @@ struct Metrics: Equatable {
 
 @MainActor
 final class SystemStatsService: ObservableObject {
-
     @Published private(set) var metrics = Metrics()
 
     let memTotal = ProcessInfo.processInfo.physicalMemory
@@ -98,7 +97,8 @@ final class SystemStatsService: ObservableObject {
 
     private static func hostCPULoad() -> host_cpu_load_info? {
         var count = mach_msg_type_number_t(
-            MemoryLayout<host_cpu_load_info>.stride / MemoryLayout<integer_t>.stride)
+            MemoryLayout<host_cpu_load_info>.stride / MemoryLayout<integer_t>.stride,
+        )
         var load = host_cpu_load_info()
         let result = withUnsafeMutablePointer(to: &load) { ptr in
             ptr.withMemoryRebound(to: integer_t.self, capacity: Int(count)) {
@@ -110,7 +110,8 @@ final class SystemStatsService: ObservableObject {
 
     private static func memoryUsed() -> UInt64 {
         var count = mach_msg_type_number_t(
-            MemoryLayout<vm_statistics64_data_t>.stride / MemoryLayout<integer_t>.stride)
+            MemoryLayout<vm_statistics64_data_t>.stride / MemoryLayout<integer_t>.stride,
+        )
         var stats = vm_statistics64_data_t()
         let result = withUnsafeMutablePointer(to: &stats) { ptr in
             ptr.withMemoryRebound(to: integer_t.self, capacity: Int(count)) {
@@ -121,7 +122,7 @@ final class SystemStatsService: ObservableObject {
         let page = UInt64(vm_kernel_page_size)
 
         return (UInt64(stats.active_count) + UInt64(stats.wire_count)
-                + UInt64(stats.compressor_page_count)) * page
+            + UInt64(stats.compressor_page_count)) * page
     }
 
     private static func gpuUsage() -> Double {
@@ -138,7 +139,8 @@ final class SystemStatsService: ObservableObject {
             var props: Unmanaged<CFMutableDictionary>?
             if IORegistryEntryCreateCFProperties(service, &props, kCFAllocatorDefault, 0) == KERN_SUCCESS,
                let dict = props?.takeRetainedValue() as? [String: Any],
-               let perf = dict["PerformanceStatistics"] as? [String: Any] {
+               let perf = dict["PerformanceStatistics"] as? [String: Any]
+            {
                 if let util = (perf["Device Utilization %"] ?? perf["GPU Activity(%)"]) as? Int {
                     sum += Double(util)
                     n += 1
@@ -153,7 +155,7 @@ final class SystemStatsService: ObservableObject {
     private static func storage() -> (used: Int64, total: Int64) {
         let url = URL(fileURLWithPath: "/")
         guard let values = try? url.resourceValues(forKeys: [
-            .volumeTotalCapacityKey, .volumeAvailableCapacityForImportantUsageKey
+            .volumeTotalCapacityKey, .volumeAvailableCapacityForImportantUsageKey,
         ]), let total = values.volumeTotalCapacity else { return (0, 0) }
         let available = values.volumeAvailableCapacityForImportantUsage ?? 0
         return (Int64(total) - available, Int64(total))
@@ -166,7 +168,7 @@ final class SystemStatsService: ObservableObject {
 
         for src in list {
             guard let desc = IOPSGetPowerSourceDescription(snap, src)?.takeUnretainedValue()
-                    as? [String: Any] else { continue }
+                as? [String: Any] else { continue }
             let cur = desc[kIOPSCurrentCapacityKey] as? Int ?? 0
             let max = desc[kIOPSMaxCapacityKey] as? Int ?? 100
             let charging = desc[kIOPSIsChargingKey] as? Bool ?? false

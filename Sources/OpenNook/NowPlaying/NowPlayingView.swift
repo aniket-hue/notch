@@ -9,7 +9,9 @@ struct NowPlayingView: View {
 
     private let diameter: CGFloat = 120
     private let ring: CGFloat = 2
-    private var ringWidth: CGFloat { hovering ? 4 : ring }
+    private var ringWidth: CGFloat {
+        hovering ? 4 : ring
+    }
 
     var body: some View {
         let np = service.now
@@ -27,8 +29,7 @@ struct NowPlayingView: View {
             ZStack {
                 Circle().fill(.white.opacity(0.05))
                 Circle().strokeBorder(.white.opacity(0.06), lineWidth: 1)
-                Image(systemName: "music.note")
-                    .font(.system(size: 20, weight: .medium))
+                Icon(.note, size: 22, weight: 1.8)
                     .foregroundStyle(.white.opacity(0.32))
             }
             .frame(width: 58, height: 58)
@@ -72,14 +73,13 @@ struct NowPlayingView: View {
     private func circle(_ np: NowPlaying, fraction: Double) -> some View {
         let inner = diameter - ring * 2
         return ZStack {
-
             Group {
                 if let art = np.artwork {
                     Image(nsImage: art).resizable().scaledToFill()
                 } else {
                     ZStack {
                         Color.white.opacity(0.12)
-                        Image(systemName: "music.note").font(.system(size: 18)).foregroundStyle(.white.opacity(0.7))
+                        Icon(.note, size: 26, weight: 2).foregroundStyle(.white.opacity(0.7))
                     }
                 }
             }
@@ -89,9 +89,9 @@ struct NowPlayingView: View {
             if hovering {
                 Circle().fill(.black.opacity(0.55)).frame(width: inner, height: inner)
                 HStack(spacing: 9) {
-                    ctrl("backward.fill", 10) { service.previous() }
-                    ctrl(np.isPlaying ? "pause.fill" : "play.fill", 14) { service.togglePlayPause() }
-                    ctrl("forward.fill", 10) { service.next() }
+                    ctrl(.prev, 18) { service.previous() }
+                    ctrl(np.isPlaying ? .pause : .play, 22) { service.togglePlayPause() }
+                    ctrl(.next, 18) { service.next() }
                 }
             }
 
@@ -113,15 +113,15 @@ struct NowPlayingView: View {
                     let f = fractionFor(value.location)
                     service.seek(to: f * service.now.duration)
                     dragFraction = nil
-                }
+                },
         )
     }
 
-    private func ctrl(_ name: String, _ size: CGFloat, _ action: @escaping () -> Void) -> some View {
+    private func ctrl(_ icon: OIcon, _ size: CGFloat, _ action: @escaping () -> Void) -> some View {
         Button(action: action) {
-            Image(systemName: name)
-                .font(.system(size: size, weight: .bold))
+            Icon(icon, size: size, weight: 2)
                 .foregroundStyle(.white)
+                .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
     }

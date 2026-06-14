@@ -35,3 +35,15 @@ struct ClipboardWidget: NotchWidget {
         AnyView(ClipboardView(service: service))
     }
 }
+
+@MainActor
+struct CalendarWidget: NotchWidget {
+    let id = "calendar"
+    let title = "Calendar"
+    let height: CGFloat = 120
+    let service: CalendarService
+
+    func makeView() -> AnyView {
+        AnyView(CalendarView(service: service))
+    }
+}

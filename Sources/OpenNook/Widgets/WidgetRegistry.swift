@@ -5,21 +5,24 @@ final class WidgetRegistry {
     private let stats: SystemStatsService
     private let nowPlaying: NowPlayingService
     private let clipboard: ClipboardService
+    private let calendar: CalendarService
 
-    let availableIDs = ["nowPlaying", "system", "clipboard"]
+    let availableIDs = ["nowPlaying", "system", "clipboard", "calendar"]
 
-    init(stats: SystemStatsService, nowPlaying: NowPlayingService, clipboard: ClipboardService) {
+    init(stats: SystemStatsService, nowPlaying: NowPlayingService, clipboard: ClipboardService, calendar: CalendarService) {
         self.stats = stats
         self.nowPlaying = nowPlaying
         self.clipboard = clipboard
+        self.calendar = calendar
     }
 
     func widget(for id: String) -> NotchWidget? {
         switch id {
-        case "nowPlaying": return NowPlayingWidget(service: nowPlaying)
-        case "system": return SystemWidget(service: stats)
-        case "clipboard": return ClipboardWidget(service: clipboard)
-        default: return nil
+        case "nowPlaying": NowPlayingWidget(service: nowPlaying)
+        case "system": SystemWidget(service: stats)
+        case "clipboard": ClipboardWidget(service: clipboard)
+        case "calendar": CalendarWidget(service: calendar)
+        default: nil
         }
     }
 
