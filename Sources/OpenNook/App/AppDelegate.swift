@@ -1,10 +1,10 @@
 import AppKit
 
+@MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     private var statusItem: NSStatusItem?
     private var notchController: NotchWindowController?
-    private var launchItem: NSMenuItem?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         setupStatusItem()
@@ -25,12 +25,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         menu.addItem(withTitle: "OpenNook", action: nil, keyEquivalent: "")
         menu.addItem(.separator())
 
-        let launch = NSMenuItem(title: "Open at Login",
-                                action: #selector(toggleLaunchAtLogin(_:)),
-                                keyEquivalent: "")
-        launch.target = self
-        menu.addItem(launch)
-        self.launchItem = launch
+        let settingsItem = NSMenuItem(title: "Settings…",
+                                      action: #selector(openSettings),
+                                      keyEquivalent: ",")
+        settingsItem.target = self
+        menu.addItem(settingsItem)
 
         menu.addItem(.separator())
 
@@ -44,13 +43,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSMenuDelegate {
         self.statusItem = item
     }
 
-    func menuNeedsUpdate(_ menu: NSMenu) {
-        launchItem?.state = LaunchAtLogin.isEnabled ? .on : .off
-    }
-
-    @objc private func toggleLaunchAtLogin(_ sender: NSMenuItem) {
-        LaunchAtLogin.toggle()
-        sender.state = LaunchAtLogin.isEnabled ? .on : .off
+    @objc private func openSettings() {
+        notchController?.openSettings()
     }
 
     @objc private func quit() {

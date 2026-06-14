@@ -3,6 +3,7 @@ import SwiftUI
 struct PagerView: View {
     let registry: WidgetRegistry
     let pages: [LayoutConfig]
+    @EnvironmentObject var settings: Settings
 
     @State private var scrolledID: Int?
 
@@ -27,21 +28,21 @@ struct PagerView: View {
             .frame(width: size.width, height: size.height)
 
             if pages.count > 1 {
-                HStack(spacing: 7) {
+                HStack(spacing: 6) {
                     ForEach(pages.indices, id: \.self) { i in
                         Button {
                             withAnimation(.easeInOut(duration: 0.3)) { scrolledID = i }
                         } label: {
-                            Circle()
-                                .fill(.white.opacity(current == i ? 0.9 : 0.28))
-                                .frame(width: 6, height: 6)
+                            Capsule()
+                                .fill(current == i ? settings.accentColor : Color.white.opacity(0.22))
+                                .frame(width: current == i ? 14 : 6, height: 6)
                                 .padding(3)
                                 .contentShape(Rectangle())
                         }
                         .buttonStyle(.plain)
                     }
                 }
-                .animation(.easeOut(duration: 0.2), value: current)
+                .animation(.easeOut(duration: 0.25), value: current)
             }
         }
     }

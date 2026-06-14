@@ -1,10 +1,18 @@
 struct LRUCache<Key: Hashable, Value> {
-    private let capacity: Int
+    private var capacity: Int
     private var order: [Key] = []
     private var store: [Key: Value] = [:]
 
     init(capacity: Int) {
         self.capacity = max(1, capacity)
+    }
+
+    mutating func setCapacity(_ value: Int) {
+        capacity = max(1, value)
+        while order.count > capacity {
+            let evicted = order.removeLast()
+            store.removeValue(forKey: evicted)
+        }
     }
 
     var values: [Value] {

@@ -2,6 +2,7 @@ import SwiftUI
 
 struct ClipboardView: View {
     @ObservedObject var service: ClipboardService
+    @EnvironmentObject var settings: Settings
 
     @State private var copiedID: UUID?
     @State private var hoveredID: UUID?
@@ -107,7 +108,7 @@ struct ClipboardView: View {
                         Color.black.opacity(0.5)
                         Image(systemName: "checkmark")
                             .font(.system(size: 15, weight: .bold))
-                            .foregroundStyle(Theme.accent)
+                            .foregroundStyle(settings.accentColor)
                     }
                 }
                 .frame(width: cardWidth, height: cardHeight)

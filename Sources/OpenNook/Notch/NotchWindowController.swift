@@ -1,4 +1,5 @@
 import AppKit
+import Combine
 import SwiftUI
 
 @MainActor
@@ -12,20 +13,27 @@ final class NotchWindowController {
     private let nowPlaying = NowPlayingService()
     private let clipboard = ClipboardService()
     private let registry: WidgetRegistry
-    private let pages = LayoutConfig.pages
+    private let settings = Settings()
+    private lazy var settingsWindow = SettingsWindowController(settings: settings, registry: registry, clipboard: clipboard)
+    private var cancellables: Set<AnyCancellable> = []
+
+    private var pages: [LayoutConfig] { LayoutConfig.visible(hidden: settings.hiddenWidgets) }
 
     private let hMargin: CGFloat = 44
     private let bMargin: CGFloat = 52
 
     init() {
         self.registry = WidgetRegistry(stats: stats, nowPlaying: nowPlaying, clipboard: clipboard)
-        let geometry = ScreenGeometry.current(rowSize: NotchWindowController.contentSize(registry, pages))
+        let initialPages = LayoutConfig.visible(hidden: settings.hiddenWidgets)
+        let geometry = ScreenGeometry.current(rowSize: NotchWindowController.contentSize(registry, initialPages))
         self.viewModel = NotchViewModel(geometry: geometry)
+        clipboard.setLimit(settings.clipboardLimit)
         stats.start()
         nowPlaying.start()
         clipboard.start()
         buildPanel()
         hoverMonitor = HoverMonitor(viewModel: viewModel, panel: panel)
+        observeSettings()
 
         NotificationCenter.default.addObserver(
             self,
@@ -33,6 +41,29 @@ final class NotchWindowController {
             name: NSApplication.didChangeScreenParametersNotification,
             object: nil
         )
+    }
+
+    private func observeSettings() {
+        settings.$hiddenWidgets
+            .dropFirst()
+            .receive(on: RunLoop.main)
+            .sink { [weak self] _ in
+                MainActor.assumeIsolated { self?.relayout() }
+            }
+            .store(in: &cancellables)
+
+        settings.$clipboardLimit
+            .dropFirst()
+            .receive(on: RunLoop.main)
+            .sink { [weak self] value in
+                MainActor.assumeIsolated { self?.clipboard.setLimit(value) }
+            }
+            .store(in: &cancellables)
+    }
+
+    private func relayout() {
+        viewModel.geometry = ScreenGeometry.current(rowSize: NotchWindowController.contentSize(registry, pages))
+        panel.setFrame(fixedFrame(), display: true)
     }
 
     private static func contentSize(_ registry: WidgetRegistry, _ pages: [LayoutConfig]) -> CGSize {
@@ -44,6 +75,10 @@ final class NotchWindowController {
         panel.orderFrontRegardless()
     }
 
+    func openSettings() {
+        settingsWindow.show()
+    }
+
     private func buildPanel() {
         let frame = fixedFrame()
 
@@ -52,7 +87,12 @@ final class NotchWindowController {
         container.frame = NSRect(origin: .zero, size: frame.size)
         container.autoresizingMask = [.width, .height]
 
-        let hosting = NSHostingView(rootView: NotchView(viewModel: viewModel, registry: registry, pages: pages))
+        let hosting = NSHostingView(rootView: NotchView(
+            viewModel: viewModel,
+            settings: settings,
+            registry: registry,
+            onOpenSettings: { [weak self] in self?.openSettings() }
+        ))
         hosting.frame = container.bounds
         hosting.autoresizingMask = [.width, .height]
         if #available(macOS 13.0, *) {

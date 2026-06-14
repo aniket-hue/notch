@@ -11,8 +11,11 @@ struct WidgetRow: View {
         HStack(alignment: .center, spacing: LayoutMetrics.spacing) {
             ForEach(Array(widgets.enumerated()), id: \.offset) { index, widget in
                 if index > 0 {
-                    Rectangle().fill(Color.white.opacity(0.08))
-                        .frame(width: LayoutMetrics.dividerWidth, height: dividerHeight)
+                    LinearGradient(
+                        colors: [.white.opacity(0), .white.opacity(0.12), .white.opacity(0)],
+                        startPoint: .top, endPoint: .bottom
+                    )
+                    .frame(width: LayoutMetrics.dividerWidth, height: dividerHeight * 0.82)
                 }
                 widget.makeView().frame(maxWidth: .infinity, alignment: .leading)
             }

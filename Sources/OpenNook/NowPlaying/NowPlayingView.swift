@@ -2,6 +2,7 @@ import SwiftUI
 
 struct NowPlayingView: View {
     @ObservedObject var service: NowPlayingService
+    @EnvironmentObject var settings: Settings
 
     @State private var hovering = false
     @State private var dragFraction: Double?
@@ -22,24 +23,26 @@ struct NowPlayingView: View {
     }
 
     private var idle: some View {
-        HStack(spacing: 11) {
+        HStack(spacing: 13) {
             ZStack {
-                Circle().fill(.white.opacity(0.06))
+                Circle().fill(.white.opacity(0.05))
+                Circle().strokeBorder(.white.opacity(0.06), lineWidth: 1)
                 Image(systemName: "music.note")
-                    .font(.system(size: 17))
-                    .foregroundStyle(.white.opacity(0.4))
+                    .font(.system(size: 20, weight: .medium))
+                    .foregroundStyle(.white.opacity(0.32))
             }
-            .frame(width: diameter, height: diameter)
-            VStack(alignment: .leading, spacing: 2) {
+            .frame(width: 58, height: 58)
+            VStack(alignment: .leading, spacing: 3) {
                 Text("Nothing playing")
-                    .font(.system(size: 12, weight: .medium, design: .rounded))
+                    .font(.system(size: 13, weight: .semibold, design: .rounded))
                     .foregroundStyle(Theme.textSecondary)
-                Text("Music · Spotify")
-                    .font(.system(size: 9, design: .rounded))
+                Text("Start a track to see it here")
+                    .font(.system(size: 10, design: .rounded))
                     .foregroundStyle(Theme.textTertiary)
             }
             Spacer(minLength: 0)
         }
+        .frame(maxHeight: .infinity)
     }
 
     private func player(_ np: NowPlaying, epoch: Double) -> some View {
@@ -95,7 +98,7 @@ struct NowPlayingView: View {
             Circle().stroke(Theme.trackBg, lineWidth: ringWidth)
                 .frame(width: diameter - ring, height: diameter - ring)
             Circle().trim(from: 0, to: max(0, min(1, fraction)))
-                .stroke(Theme.accent, style: StrokeStyle(lineWidth: ringWidth, lineCap: .round))
+                .stroke(settings.accentColor, style: StrokeStyle(lineWidth: ringWidth, lineCap: .round))
                 .rotationEffect(.degrees(-90))
                 .frame(width: diameter - ring, height: diameter - ring)
         }

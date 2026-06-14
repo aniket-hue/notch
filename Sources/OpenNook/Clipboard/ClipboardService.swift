@@ -16,9 +16,18 @@ final class ClipboardService: ObservableObject {
 
     @Published private(set) var items: [ClipItem] = []
 
-    private var cache = LRUCache<String, ClipItem>(capacity: 50)
+    private var cache: LRUCache<String, ClipItem>
     private var timer: Timer?
     private var lastChangeCount = NSPasteboard.general.changeCount
+
+    init(limit: Int = 50) {
+        cache = LRUCache<String, ClipItem>(capacity: limit)
+    }
+
+    func setLimit(_ value: Int) {
+        cache.setCapacity(value)
+        items = cache.values
+    }
 
     func start() {
         let timer = Timer.scheduledTimer(withTimeInterval: 0.6, repeats: true) { [weak self] _ in

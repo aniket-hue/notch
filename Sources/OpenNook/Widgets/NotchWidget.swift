@@ -26,4 +26,11 @@ struct LayoutConfig: Codable {
             LayoutItem(widgetID: "clipboard"),
         ]),
     ]
+
+    static func visible(hidden: Set<String>) -> [LayoutConfig] {
+        let filtered = pages
+            .map { LayoutConfig(items: $0.items.filter { !hidden.contains($0.widgetID) }) }
+            .filter { !$0.items.isEmpty }
+        return filtered.isEmpty ? [LayoutConfig(items: [])] : filtered
+    }
 }
