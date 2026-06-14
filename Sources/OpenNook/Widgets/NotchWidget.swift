@@ -18,24 +18,18 @@ struct LayoutItem: Codable, Identifiable {
 
 struct LayoutConfig: Codable {
     var items: [LayoutItem]
+}
 
-    static let pages: [LayoutConfig] = [
-        LayoutConfig(items: [
-            LayoutItem(widgetID: "nowPlaying"),
-            LayoutItem(widgetID: "system"),
-        ]),
-        LayoutConfig(items: [
-            LayoutItem(widgetID: "clipboard"),
-        ]),
-        LayoutConfig(items: [
-            LayoutItem(widgetID: "calendar"),
-        ]),
-    ]
-
-    static func visible(hidden: Set<String>) -> [LayoutConfig] {
-        let filtered = pages
-            .map { LayoutConfig(items: $0.items.filter { !hidden.contains($0.widgetID) }) }
+enum LayoutBuilder {
+    @MainActor
+    static func pages(groups: [[String]], registry: WidgetRegistry) -> [LayoutConfig] {
+        let pages = groups
+            .map { group in
+                LayoutConfig(items: group
+                    .filter { registry.widget(for: $0) != nil }
+                    .map { LayoutItem(widgetID: $0) })
+            }
             .filter { !$0.items.isEmpty }
-        return filtered.isEmpty ? [LayoutConfig(items: [])] : filtered
+        return pages.isEmpty ? [LayoutConfig(items: [])] : pages
     }
 }

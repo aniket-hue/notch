@@ -7,7 +7,7 @@ struct NowPlayingView: View {
     @State private var hovering = false
     @State private var dragFraction: Double?
 
-    private let diameter: CGFloat = 120
+    private let diameter: CGFloat = 116
     private let ring: CGFloat = 2
     private var ringWidth: CGFloat {
         hovering ? 4 : ring
@@ -15,12 +15,14 @@ struct NowPlayingView: View {
 
     var body: some View {
         let np = service.now
-        if np.hasTrack {
-            TimelineView(.periodic(from: .now, by: 0.5)) { context in
-                player(np, epoch: context.date.timeIntervalSince1970)
+        Group {
+            if np.hasTrack {
+                TimelineView(.periodic(from: .now, by: 0.5)) { context in
+                    player(np, epoch: context.date.timeIntervalSince1970)
+                }
+            } else {
+                idle
             }
-        } else {
-            idle
         }
     }
 

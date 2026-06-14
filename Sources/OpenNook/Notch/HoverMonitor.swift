@@ -27,15 +27,15 @@ final class HoverMonitor {
     }
 
     private func activeZone() -> CGRect {
-        let geo = viewModel.geometry
-        let f = geo.screen.frame
+        let metrics = viewModel.metrics
+        let f = metrics.screen.frame
 
         if viewModel.isOpen {
-            let w = geo.openSize.width, h = geo.openSize.height
+            let s = viewModel.openContentSize == .zero ? viewModel.closedSize : viewModel.openContentSize
             let m: CGFloat = 26
-            return CGRect(x: f.midX - w / 2 - m, y: f.maxY - h - m, width: w + 2 * m, height: h + m)
+            return CGRect(x: f.midX - s.width / 2 - m, y: f.maxY - s.height - m, width: s.width + 2 * m, height: s.height + m)
         } else {
-            let w = geo.closedWidth, h = geo.closedHeight
+            let w = metrics.notchWidth, h = metrics.notchHeight
             let mx: CGFloat = 18, my: CGFloat = 16
             return CGRect(x: f.midX - w / 2 - mx, y: f.maxY - h - my, width: w + 2 * mx, height: h + my)
         }

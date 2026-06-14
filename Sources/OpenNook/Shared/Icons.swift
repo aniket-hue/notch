@@ -11,7 +11,10 @@ enum OIcon: String {
     case check
     case calendar
     case calendarClear = "calendar-clear"
-    case lock, video
+    case lock, video, grip, git, eye, copy, open, tray, stack
+    case eyeSlash = "eye-slash"
+    case checkCircle = "check-circle"
+    case xCircle = "x-circle"
 }
 
 struct Icon: View {

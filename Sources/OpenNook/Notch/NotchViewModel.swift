@@ -9,16 +9,24 @@ final class NotchViewModel: ObservableObject {
     }
 
     @Published var state: State = .closed
-    @Published var geometry: NotchGeometry
+    @Published var metrics: NotchMetrics
+    @Published var openContentSize: CGSize = .zero
+    @Published var artGradient: [Color] = []
+    @Published var showShelf = false
+    @Published var dropActive = false
 
     private var closeWorkItem: DispatchWorkItem?
 
-    init(geometry: NotchGeometry) {
-        self.geometry = geometry
+    init(metrics: NotchMetrics) {
+        self.metrics = metrics
     }
 
     var isOpen: Bool {
         state == .open
+    }
+
+    var closedSize: CGSize {
+        CGSize(width: metrics.notchWidth, height: metrics.notchHeight)
     }
 
     private var springAnimation: Animation {
@@ -42,17 +50,10 @@ final class NotchViewModel: ObservableObject {
             withAnimation(springAnimation) {
                 self.state = .closed
             }
+            showShelf = false
+            dropActive = false
         }
         closeWorkItem = work
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.15, execute: work)
-    }
-
-    var currentShapeSize: CGSize {
-        switch state {
-        case .closed:
-            CGSize(width: geometry.closedWidth, height: geometry.closedHeight)
-        case .open:
-            geometry.openSize
-        }
     }
 }

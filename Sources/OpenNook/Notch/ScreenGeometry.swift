@@ -1,53 +1,29 @@
 import AppKit
 
-struct NotchGeometry {
-    let closedWidth: CGFloat
-    let closedHeight: CGFloat
+struct NotchMetrics {
+    let notchWidth: CGFloat
+    let notchHeight: CGFloat
     let hasHardwareNotch: Bool
     let screen: NSScreen
-    let openSize: CGSize
 }
 
 enum ScreenGeometry {
-    static func current(rowSize: CGSize) -> NotchGeometry {
+    static func current() -> NotchMetrics {
         let screen = NSScreen.screens.first(where: { $0.safeAreaInsets.top > 0 })
             ?? NSScreen.main
             ?? NSScreen.screens.first!
 
         let topInset = screen.safeAreaInsets.top
 
-        let closedWidth: CGFloat
-        let closedHeight: CGFloat
-        let hasNotch: Bool
-
         if topInset > 0 {
-            let fullWidth = screen.frame.width
-            let leftWidth = screen.auxiliaryTopLeftArea?.width ?? 0
-            let rightWidth = screen.auxiliaryTopRightArea?.width ?? 0
-            var notchWidth = fullWidth - leftWidth - rightWidth
-            if notchWidth <= 0 || notchWidth > fullWidth * 0.5 {
-                notchWidth = 200
-            }
-            closedWidth = notchWidth
-            closedHeight = topInset
-            hasNotch = true
+            let left = screen.auxiliaryTopLeftArea?.width ?? 0
+            let right = screen.auxiliaryTopRightArea?.width ?? 0
+            var width = screen.frame.width - left - right
+            if width <= 0 || width > screen.frame.width * 0.5 { width = 200 }
+            return NotchMetrics(notchWidth: width, notchHeight: topInset, hasHardwareNotch: true, screen: screen)
         } else {
-            closedWidth = 320
-            closedHeight = 32
-            hasNotch = false
+            let menubar = screen.frame.maxY - screen.visibleFrame.maxY
+            return NotchMetrics(notchWidth: 220, notchHeight: max(menubar, 24), hasHardwareNotch: false, screen: screen)
         }
-
-        let openSize = CGSize(
-            width: rowSize.width + LayoutMetrics.hPadding * 2,
-            height: closedHeight + rowSize.height + LayoutMetrics.bottomPadding + LayoutMetrics.topGap,
-        )
-
-        return NotchGeometry(
-            closedWidth: closedWidth,
-            closedHeight: closedHeight,
-            hasHardwareNotch: hasNotch,
-            screen: screen,
-            openSize: openSize,
-        )
     }
 }

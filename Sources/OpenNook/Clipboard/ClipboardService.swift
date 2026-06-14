@@ -11,6 +11,40 @@ struct ClipItem: Identifiable, Equatable {
     static func == (a: ClipItem, b: ClipItem) -> Bool { a.id == b.id }
 }
 
+private struct StoredItem: Codable {
+    let kind: String
+    let text: String?
+    let imageData: Data?
+    let date: Date
+
+    init(_ item: ClipItem) {
+        switch item.kind {
+        case .text:
+            kind = "text"
+            text = item.text
+            imageData = nil
+        case .image:
+            kind = "image"
+            text = nil
+            imageData = item.image?.pngData()
+        }
+        date = item.date
+    }
+
+    func toClipItem() -> ClipItem? {
+        switch kind {
+        case "text":
+            guard let text else { return nil }
+            return ClipItem(kind: .text, text: text, image: nil, date: date)
+        case "image":
+            guard let imageData, let img = NSImage(data: imageData) else { return nil }
+            return ClipItem(kind: .image, text: nil, image: img, date: date)
+        default:
+            return nil
+        }
+    }
+}
+
 @MainActor
 final class ClipboardService: ObservableObject {
     @Published private(set) var items: [ClipItem] = []
@@ -18,17 +52,23 @@ final class ClipboardService: ObservableObject {
     private var cache: LRUCache<String, ClipItem>
     private var timer: Timer?
     private var lastChangeCount = NSPasteboard.general.changeCount
+    private let storeURL: URL?
+    private let saveQueue = DispatchQueue(label: "opennook.clipboard.save")
 
     init(limit: Int = 50) {
         cache = LRUCache<String, ClipItem>(capacity: limit)
+        storeURL = Self.makeStoreURL()
+        loadPersisted()
     }
 
     func setLimit(_ value: Int) {
         cache.setCapacity(value)
         items = cache.values
+        persist()
     }
 
     func start() {
+        capture(NSPasteboard.general)
         let timer = Timer.scheduledTimer(withTimeInterval: 0.6, repeats: true) { [weak self] _ in
             guard let self else { return }
             MainActor.assumeIsolated { self.poll() }
@@ -61,6 +101,7 @@ final class ClipboardService: ObservableObject {
     private func add(_ item: ClipItem, key: String) {
         cache.insert(item, for: key)
         items = cache.values
+        persist()
     }
 
     func copyBack(_ item: ClipItem) {
@@ -75,10 +116,50 @@ final class ClipboardService: ObservableObject {
         lastChangeCount = pb.changeCount
         cache.touch(item.kind == .text ? "t:" + (item.text ?? "") : "i:" + (item.image?.tiffRepresentation?.hashValue.description ?? ""))
         items = cache.values
+        persist()
     }
 
     func clear() {
         cache.removeAll()
         items = cache.values
+        persist()
+    }
+
+    private func loadPersisted() {
+        guard let url = storeURL,
+              let data = try? Data(contentsOf: url),
+              let stored = try? JSONDecoder().decode([StoredItem].self, from: data) else { return }
+        for dto in stored.reversed() {
+            guard let item = dto.toClipItem() else { continue }
+            let key = item.kind == .text
+                ? "t:" + (item.text ?? "")
+                : "i:" + (item.image?.tiffRepresentation?.hashValue.description ?? UUID().uuidString)
+            cache.insert(item, for: key)
+        }
+        items = cache.values
+    }
+
+    private func persist() {
+        guard let url = storeURL else { return }
+        let stored = cache.values.map(StoredItem.init)
+        saveQueue.async {
+            guard let data = try? JSONEncoder().encode(stored) else { return }
+            try? data.write(to: url, options: .atomic)
+        }
+    }
+
+    private static func makeStoreURL() -> URL? {
+        let fm = FileManager.default
+        guard let dir = fm.urls(for: .applicationSupportDirectory, in: .userDomainMask).first else { return nil }
+        let appDir = dir.appendingPathComponent("OpenNook", isDirectory: true)
+        try? fm.createDirectory(at: appDir, withIntermediateDirectories: true)
+        return appDir.appendingPathComponent("clipboard.json")
+    }
+}
+
+private extension NSImage {
+    func pngData() -> Data? {
+        guard let tiff = tiffRepresentation, let rep = NSBitmapImageRep(data: tiff) else { return nil }
+        return rep.representation(using: .png, properties: [:])
     }
 }

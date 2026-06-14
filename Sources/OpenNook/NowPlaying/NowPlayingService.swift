@@ -10,6 +10,7 @@ struct NowPlaying: Equatable {
     var elapsedAtAnchor: Double = 0
     var anchorEpoch: Double = 0
     var artwork: NSImage?
+    var artworkID: Int = 0
 
     static func == (l: NowPlaying, r: NowPlaying) -> Bool {
         l.hasTrack == r.hasTrack && l.title == r.title && l.artist == r.artist &&
@@ -106,8 +107,14 @@ final class NowPlayingService: ObservableObject {
         n.anchorEpoch = p.anchorEpoch
         if let d = p.artworkData {
             n.artwork = NSImage(data: d)
+            var hasher = Hasher()
+            hasher.combine(d.count)
+            hasher.combine(d.prefix(128))
+            hasher.combine(d.suffix(128))
+            n.artworkID = hasher.finalize()
         } else {
             n.artwork = now.artwork
+            n.artworkID = now.artworkID
         }
         now = n
     }

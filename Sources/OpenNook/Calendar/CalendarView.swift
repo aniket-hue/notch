@@ -12,13 +12,12 @@ struct CalendarView: View {
             header
             content
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
         .onReceive(Timer.publish(every: 30, on: .main, in: .common).autoconnect()) { now = $0 }
         .onAppear { service.ensureAccess() }
     }
 
     private var header: some View {
-        HStack(alignment: .top, spacing: 12) {
+        HStack(alignment: .center, spacing: 12) {
             VStack(alignment: .leading, spacing: -1) {
                 Text(service.selectedDate.formatted(.dateTime.month(.abbreviated)))
                     .font(.system(size: 18, weight: .semibold, design: .rounded))
@@ -70,27 +69,29 @@ struct CalendarView: View {
         let cal = Calendar.current
         let isSelected = cal.isDate(day, inSameDayAs: service.selectedDate)
         let isToday = cal.isDate(day, inSameDayAs: today)
-        let numberColor: Color = isSelected ? .white : (isToday ? settings.accentColor : .white.opacity(0.9))
-        let dotColor: Color = isToday ? (isSelected ? .white : settings.accentColor) : .clear
+        let numberColor: Color = isSelected ? .white : (isToday ? settings.accentColor : .white.opacity(0.85))
         return Button {
             service.select(day)
         } label: {
-            VStack(spacing: 3) {
+            VStack(spacing: 5) {
                 Text(day.formatted(.dateTime.weekday(.abbreviated)))
                     .font(.system(size: 9, weight: .semibold, design: .rounded))
                     .tracking(0.4)
-                    .foregroundStyle(isSelected ? .white.opacity(0.9) : Theme.textTertiary)
-                Text("\(cal.component(.day, from: day))")
-                    .font(.system(size: 15, weight: .semibold, design: .rounded))
-                    .foregroundStyle(numberColor)
-                Circle().fill(dotColor).frame(width: 4, height: 4)
+                    .foregroundStyle(Theme.textTertiary)
+                ZStack {
+                    if isSelected {
+                        Circle().fill(settings.accentColor)
+                    } else if isToday {
+                        Circle().strokeBorder(settings.accentColor.opacity(0.85), lineWidth: 1.5)
+                    }
+                    Text("\(cal.component(.day, from: day))")
+                        .font(.system(size: 14, weight: .semibold, design: .rounded))
+                        .foregroundStyle(numberColor)
+                }
+                .frame(width: 27, height: 27)
             }
-            .frame(width: 40)
-            .padding(.vertical, 5)
-            .background(
-                isSelected ? settings.accentColor : .clear,
-                in: RoundedRectangle(cornerRadius: 11),
-            )
+            .frame(width: 38)
+            .padding(.vertical, 4)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)

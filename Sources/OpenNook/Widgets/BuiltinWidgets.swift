@@ -25,6 +25,18 @@ struct SystemWidget: NotchWidget {
 }
 
 @MainActor
+struct UsageWidget: NotchWidget {
+    let id = "usage"
+    let title = "Usage"
+    let height: CGFloat = 120
+    let service: UsageService
+
+    func makeView() -> AnyView {
+        AnyView(UsageView(service: service))
+    }
+}
+
+@MainActor
 struct ClipboardWidget: NotchWidget {
     let id = "clipboard"
     let title = "Clipboard"
@@ -45,5 +57,17 @@ struct CalendarWidget: NotchWidget {
 
     func makeView() -> AnyView {
         AnyView(CalendarView(service: service))
+    }
+}
+
+@MainActor
+struct GitHubWidget: NotchWidget {
+    let id = "github"
+    let title = "Pull Requests"
+    let height: CGFloat = 120
+    let service: GitHubService
+
+    func makeView() -> AnyView {
+        AnyView(GitHubPRsView(service: service))
     }
 }
