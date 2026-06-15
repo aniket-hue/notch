@@ -3,7 +3,7 @@ import Foundation
 
 @MainActor
 final class UsageService: ObservableObject {
-    @Published private(set) var snapshot = UsageSnapshot.empty()
+    @Published private(set) var snapshot = ActivitySnapshot.empty()
     @Published private(set) var loading = false
 
     private let provider: UsageProvider

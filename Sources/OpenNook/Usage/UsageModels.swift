@@ -1,32 +1,44 @@
 import Foundation
 
-enum UsageWindowKind: String {
-    case fiveHour
-    case week
-}
-
-struct UsageWindow: Equatable {
-    let kind: UsageWindowKind
-    let title: String
-    let tokens: Int
+struct DayStat: Equatable {
+    let label: String
     let cost: Double
-    let resetsAt: Date?
+    let isToday: Bool
 }
 
-struct UsageSnapshot: Equatable {
-    let providerID: String
-    let providerName: String
-    let windows: [UsageWindow]
+struct ProjectStat: Equatable {
+    let name: String
+    let cost: Double
+    let sessions: Int
+}
+
+struct ModelStat: Equatable {
+    let key: String
+    let cost: Double
+}
+
+struct ActivitySnapshot: Equatable {
+    let activeTodayHours: Double
+    let sessionsWeek: Int
+    let costWeek: Double
+    let days: [DayStat]
+    let projects: [ProjectStat]
+    let models: [ModelStat]
+    let filesWeek: Int
     let hasData: Bool
     let updatedAt: Date
 
-    static func empty(id: String = "claude", name: String = "Claude") -> UsageSnapshot {
-        UsageSnapshot(providerID: id, providerName: name, windows: [], hasData: false, updatedAt: .distantPast)
+    static func empty() -> ActivitySnapshot {
+        ActivitySnapshot(
+            activeTodayHours: 0, sessionsWeek: 0, costWeek: 0,
+            days: [], projects: [], models: [], filesWeek: 0,
+            hasData: false, updatedAt: .distantPast,
+        )
     }
 }
 
-protocol UsageProvider: Sendable {
+protocol UsageProvider {
     var id: String { get }
     var displayName: String { get }
-    func snapshot() async -> UsageSnapshot
+    func snapshot() async -> ActivitySnapshot
 }

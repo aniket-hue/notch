@@ -4,6 +4,7 @@ import SwiftUI
 struct CalendarView: View {
     @ObservedObject var service: CalendarService
     @EnvironmentObject var settings: Settings
+    @Environment(\.slotContext) private var slot
 
     @State private var now = Date()
 
@@ -45,17 +46,8 @@ struct CalendarView: View {
                 }
                 .padding(.horizontal, 4)
             }
-            .mask(
-                LinearGradient(
-                    stops: [
-                        .init(color: .clear, location: 0),
-                        .init(color: .black, location: 0.05),
-                        .init(color: .black, location: 0.95),
-                        .init(color: .clear, location: 1),
-                    ],
-                    startPoint: .leading, endPoint: .trailing,
-                ),
-            )
+            .padding(.trailing, -slot.endBleed(.horizontal))
+            .edgeFade(.trailing)
             .onAppear { proxy.scrollTo(cal.startOfDay(for: service.selectedDate), anchor: .center) }
             .onChange(of: service.selectedDate) { _, new in
                 withAnimation(.easeOut(duration: 0.25)) {

@@ -4,7 +4,7 @@ struct ClipboardView: View {
     @ObservedObject var service: ClipboardService
     @EnvironmentObject var settings: Settings
 
-    @Environment(\.slotInset) private var slotInset
+    @Environment(\.slotContext) private var slot
 
     @State private var copiedID: UUID?
     @State private var hoveredID: UUID?
@@ -20,14 +20,16 @@ struct ClipboardView: View {
 
     var body: some View {
         GeometryReader { geo in
-            let viewport = geo.size.width - slotInset
+            let endBleed = slot.endBleed(.horizontal)
+            let viewport = geo.size.width + endBleed
             let content = CGFloat(service.items.count) * (cardWidth + cardGap) - cardGap
             let maxOffset = max(0, content - viewport)
+            let pos = min(offset, maxOffset)
+            let faded: Edge.Set = (pos > 1 ? .leading : Edge.Set()).union(pos < maxOffset - 1 ? .trailing : Edge.Set())
             VStack(alignment: .leading, spacing: 7) {
                 header(viewport: viewport, maxOffset: maxOffset)
-                    .padding(.trailing, slotInset)
                 if service.items.isEmpty {
-                    emptyState.padding(.trailing, slotInset)
+                    emptyState
                 } else {
                     HStack(spacing: cardGap) {
                         ForEach(service.items) { card($0) }
@@ -35,12 +37,11 @@ struct ClipboardView: View {
                     .offset(x: -min(offset, maxOffset))
                     .frame(width: viewport, alignment: .topLeading)
                     .clipped()
-                    .edgeFade(maxOffset > 0 ? [.leading, .trailing] : .trailing)
+                    .edgeFade(faded)
+                    .padding(.trailing, -endBleed)
                 }
             }
-            .padding(.leading, slotInset)
         }
-        .slotBleed(slotInset)
     }
 
     private func header(viewport: CGFloat, maxOffset: CGFloat) -> some View {

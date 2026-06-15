@@ -16,8 +16,6 @@ struct SettingsView: View {
                 .tabItem { Label { Text("Widgets") } icon: { Icon(.widgets, size: 15) } }
             ClipboardTab(settings: settings, clipboard: clipboard)
                 .tabItem { Label { Text("Clipboard") } icon: { Icon(.clipboard, size: 15) } }
-            UsageTab(settings: settings)
-                .tabItem { Label { Text("Usage") } icon: { Icon(.info, size: 15) } }
             GitHubTab(github: github)
                 .tabItem { Label { Text("GitHub") } icon: { Icon(.git, size: 15) } }
             AboutTab()
@@ -287,47 +285,6 @@ private struct WidgetsTab: View {
             guard let id = items.first else { return false }
             settings.moveToHidden(id, available: available)
             return true
-        }
-    }
-}
-
-private struct UsageTab: View {
-    @ObservedObject var settings: Settings
-
-    var body: some View {
-        Form {
-            Section {
-                budgetRow(
-                    title: "5-hour budget",
-                    value: $settings.usageBudget5h,
-                    range: 10 ... 300, step: 5,
-                )
-                budgetRow(
-                    title: "Weekly budget",
-                    value: $settings.usageBudgetWeek,
-                    range: 50 ... 5000, step: 50,
-                )
-            } header: {
-                Text("Spend budgets")
-            } footer: {
-                Text("Claude doesn’t expose subscription limits to third-party apps, so the bars track your token spend (estimated from local Claude Code logs) against budgets you set here. Nothing leaves your Mac.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-        }
-        .formStyle(.grouped)
-    }
-
-    private func budgetRow(title: String, value: Binding<Double>, range: ClosedRange<Double>, step: Double) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
-            HStack {
-                Text(title)
-                Spacer()
-                Text("$\(Int(value.wrappedValue.rounded()))")
-                    .foregroundStyle(.secondary)
-                    .monospacedDigit()
-            }
-            Slider(value: value, in: range, step: step)
         }
     }
 }

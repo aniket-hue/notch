@@ -1,9 +1,27 @@
 import SwiftUI
 
+private struct GHScrollYKey: PreferenceKey {
+    static let defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) { value = nextValue() }
+}
+
+private struct GHContentHKey: PreferenceKey {
+    static let defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) { value = max(value, nextValue()) }
+}
+
+private struct GHViewportHKey: PreferenceKey {
+    static let defaultValue: CGFloat = 0
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) { value = max(value, nextValue()) }
+}
+
 struct GitHubPRsView: View {
     @ObservedObject var service: GitHubService
     @EnvironmentObject var settings: Settings
     @State private var copied: String?
+    @State private var scrollY: CGFloat = 0
+    @State private var contentH: CGFloat = 0
+    @State private var viewportH: CGFloat = 0
 
     private let green = Color(red: 0.40, green: 0.89, blue: 0.60)
     private let red = Color(red: 0.95, green: 0.45, blue: 0.42)
@@ -40,6 +58,9 @@ struct GitHubPRsView: View {
                 message("All caught up", "No pull requests need you")
             }
         } else {
+            let scrolled = scrollY < -1
+            let moreBelow = (contentH - viewportH + scrollY) > 1
+            let faded: Edge.Set = (scrolled ? .top : Edge.Set()).union(moreBelow ? .bottom : Edge.Set())
             ScrollView(.vertical, showsIndicators: false) {
                 VStack(spacing: 0) {
                     ForEach(review) { row($0) }
@@ -48,7 +69,20 @@ struct GitHubPRsView: View {
                     }
                     ForEach(mine) { row($0) }
                 }
+                .background(GeometryReader { g in
+                    Color.clear
+                        .preference(key: GHScrollYKey.self, value: g.frame(in: .named("ghScroll")).minY)
+                        .preference(key: GHContentHKey.self, value: g.size.height)
+                })
             }
+            .coordinateSpace(name: "ghScroll")
+            .background(GeometryReader { g in
+                Color.clear.preference(key: GHViewportHKey.self, value: g.size.height)
+            })
+            .onPreferenceChange(GHScrollYKey.self) { scrollY = $0 }
+            .onPreferenceChange(GHContentHKey.self) { contentH = $0 }
+            .onPreferenceChange(GHViewportHKey.self) { viewportH = $0 }
+            .edgeFade(faded, 0.12)
         }
     }
 

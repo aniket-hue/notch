@@ -51,14 +51,6 @@ final class Settings: ObservableObject {
         didSet { defaults.set(clipboardLimit, forKey: Keys.clipboardLimit) }
     }
 
-    @Published var usageBudget5h: Double {
-        didSet { defaults.set(usageBudget5h, forKey: Keys.usageBudget5h) }
-    }
-
-    @Published var usageBudgetWeek: Double {
-        didSet { defaults.set(usageBudgetWeek, forKey: Keys.usageBudgetWeek) }
-    }
-
     @Published var hiddenWidgets: Set<String> {
         didSet { defaults.set(Array(hiddenWidgets), forKey: Keys.hiddenWidgets) }
     }
@@ -117,8 +109,6 @@ final class Settings: ObservableObject {
         static let accent = "opennook.accent"
         static let glassTint = "opennook.glassTint"
         static let clipboardLimit = "opennook.clipboardLimit"
-        static let usageBudget5h = "opennook.usageBudget5h"
-        static let usageBudgetWeek = "opennook.usageBudgetWeek"
         static let hiddenWidgets = "opennook.hiddenWidgets"
         static let layout = "opennook.layout"
     }
@@ -128,8 +118,6 @@ final class Settings: ObservableObject {
         accent = AccentChoice(rawValue: defaults.string(forKey: Keys.accent) ?? "") ?? .pink
         glassTint = defaults.object(forKey: Keys.glassTint) as? Double ?? 0
         clipboardLimit = defaults.object(forKey: Keys.clipboardLimit) as? Int ?? 50
-        usageBudget5h = defaults.object(forKey: Keys.usageBudget5h) as? Double ?? 50
-        usageBudgetWeek = defaults.object(forKey: Keys.usageBudgetWeek) as? Double ?? 500
         hiddenWidgets = Set(defaults.stringArray(forKey: Keys.hiddenWidgets) ?? [])
         if let data = defaults.data(forKey: Keys.layout),
            let saved = try? JSONDecoder().decode([[String]].self, from: data)

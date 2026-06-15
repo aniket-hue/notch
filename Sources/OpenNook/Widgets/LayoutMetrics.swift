@@ -31,32 +31,21 @@ enum LayoutMetrics {
     }
 }
 
-private struct SlotInsetKey: EnvironmentKey {
-    static let defaultValue: CGFloat = LayoutMetrics.slotInset
-}
-
-extension EnvironmentValues {
-    var slotInset: CGFloat {
-        get { self[SlotInsetKey.self] }
-        set { self[SlotInsetKey.self] = newValue }
-    }
-}
-
 extension View {
-    func slotBleed(_ inset: CGFloat, edges: Edge.Set = .horizontal) -> some View {
-        padding(edges, -inset)
-    }
-
     func edgeFade(_ edges: Edge.Set, _ fraction: CGFloat = 0.08) -> some View {
-        mask(
+        let vertical = edges.contains(.top) || edges.contains(.bottom)
+        let near: Edge.Set = vertical ? .top : .leading
+        let far: Edge.Set = vertical ? .bottom : .trailing
+        return mask(
             LinearGradient(
                 stops: [
                     .init(color: .clear, location: 0),
-                    .init(color: .white, location: edges.contains(.leading) ? fraction : 0),
-                    .init(color: .white, location: edges.contains(.trailing) ? 1 - fraction : 1),
+                    .init(color: .white, location: edges.contains(near) ? fraction : 0),
+                    .init(color: .white, location: edges.contains(far) ? 1 - fraction : 1),
                     .init(color: .clear, location: 1),
                 ],
-                startPoint: .leading, endPoint: .trailing,
+                startPoint: vertical ? .top : .leading,
+                endPoint: vertical ? .bottom : .trailing,
             ),
         )
     }
