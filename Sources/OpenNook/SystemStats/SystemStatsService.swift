@@ -25,23 +25,14 @@ struct Metrics: Equatable {
 final class SystemStatsService: ObservableObject {
     @Published private(set) var metrics = Metrics()
 
-    let memTotal = ProcessInfo.processInfo.physicalMemory
-
     private var timer: Timer?
-    private var prevCPU: host_cpu_load_info?
-    private var prevNet: (rx: UInt64, tx: UInt64)?
-    private var prevNetTime: TimeInterval?
-
-    private let historyLen = 60
-    private var cpuHist = [Double](repeating: 0, count: 60)
-    private var memHist = [Double](repeating: 0, count: 60)
-    private var gpuHist = [Double](repeating: 0, count: 60)
+    private nonisolated let sampler = StatsSampler()
+    private nonisolated let queue = DispatchQueue(label: "opennook.stats.sample", qos: .utility)
 
     func start() {
-        sample()
+        scheduleSample()
         let timer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { [weak self] _ in
-            guard let self else { return }
-            MainActor.assumeIsolated { self.sample() }
+            self?.scheduleSample()
         }
         RunLoop.main.add(timer, forMode: .common)
         self.timer = timer
@@ -52,7 +43,33 @@ final class SystemStatsService: ObservableObject {
         timer = nil
     }
 
-    private func sample() {
+    private nonisolated func scheduleSample() {
+        queue.async { [weak self] in
+            guard let self else { return }
+            let m = sampler.sample()
+            DispatchQueue.main.async {
+                MainActor.assumeIsolated { self.metrics = m }
+            }
+        }
+    }
+}
+
+private final class StatsSampler: @unchecked Sendable {
+    private let memTotal = ProcessInfo.processInfo.physicalMemory
+    private var prevCPU: host_cpu_load_info?
+    private var prevNet: (rx: UInt64, tx: UInt64)?
+    private var prevNetTime: TimeInterval?
+
+    private let historyLen = 60
+    private var cpuHist = [Double](repeating: 0, count: 60)
+    private var memHist = [Double](repeating: 0, count: 60)
+    private var gpuHist = [Double](repeating: 0, count: 60)
+
+    private var lastCPU = 0.0
+    private var lastNetDown = 0.0
+    private var lastNetUp = 0.0
+
+    func sample() -> Metrics {
         var m = Metrics()
         m.cpu = cpuUsage()
         m.memUsed = Self.memoryUsed()
@@ -78,11 +95,14 @@ final class SystemStatsService: ObservableObject {
         m.memHistory = memHist
         m.gpuHistory = gpuHist
 
-        metrics = m
+        lastCPU = m.cpu
+        lastNetDown = m.netDown
+        lastNetUp = m.netUp
+        return m
     }
 
     private func cpuUsage() -> Double {
-        guard let ticks = Self.hostCPULoad() else { return metrics.cpu }
+        guard let ticks = Self.hostCPULoad() else { return lastCPU }
         defer { prevCPU = ticks }
         guard let prev = prevCPU else { return 0 }
         let user = Double(ticks.cpu_ticks.0 &- prev.cpu_ticks.0)
@@ -91,7 +111,7 @@ final class SystemStatsService: ObservableObject {
         let nice = Double(ticks.cpu_ticks.3 &- prev.cpu_ticks.3)
         let busy = user + system + nice
         let total = busy + idle
-        guard total > 0 else { return metrics.cpu }
+        guard total > 0 else { return lastCPU }
         return max(0, min(1, busy / total))
     }
 
@@ -183,7 +203,7 @@ final class SystemStatsService: ObservableObject {
         defer { prevNet = cur; prevNetTime = now }
         guard let prev = prevNet, let prevTime = prevNetTime else { return (0, 0) }
         let dt = now - prevTime
-        guard dt > 0 else { return (metrics.netDown, metrics.netUp) }
+        guard dt > 0 else { return (lastNetDown, lastNetUp) }
         let down = cur.rx >= prev.rx ? Double(cur.rx - prev.rx) / dt : 0
         let up = cur.tx >= prev.tx ? Double(cur.tx - prev.tx) / dt : 0
         return (down, up)

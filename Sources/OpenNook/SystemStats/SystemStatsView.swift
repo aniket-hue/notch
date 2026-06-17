@@ -83,16 +83,10 @@ struct SystemStatsView: View {
     private var graph: some View {
         GeometryReader { geo in
             ZStack(alignment: .topLeading) {
-                Canvas { ctx, size in
-                    let baseline = Path { p in
-                        p.move(to: CGPoint(x: 0, y: size.height / 2))
-                        p.addLine(to: CGPoint(x: size.width, y: size.height / 2))
-                    }
-                    ctx.stroke(baseline, with: .color(.white.opacity(0.05)), lineWidth: 1)
-                    drawLine(ctx, m.memHistory, size, memColor)
-                    drawLine(ctx, m.cpuHistory, size, cpuColor)
-                    drawLine(ctx, m.gpuHistory, size, gpuColor)
-                }
+                GraphCanvas(
+                    mem: m.memHistory, cpu: m.cpuHistory, gpu: m.gpuHistory,
+                    memColor: memColor, cpuColor: cpuColor, gpuColor: gpuColor,
+                )
                 if let f = hoverFrac {
                     Rectangle().fill(.white.opacity(0.3))
                         .frame(width: 1)
@@ -102,12 +96,75 @@ struct SystemStatsView: View {
             .contentShape(Rectangle())
             .onContinuousHover { phase in
                 switch phase {
-                case let .active(p): hoverFrac = min(1, max(0, p.x / geo.size.width))
+                case let .active(p): updateHover(p.x, width: geo.size.width)
                 case .ended: hoverFrac = nil
                 }
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    private func updateHover(_ x: CGFloat, width: CGFloat) {
+        let count = m.cpuHistory.count
+        guard width > 0, count > 1 else { hoverFrac = nil; return }
+        let raw = min(1, max(0, Double(x / width)))
+        let idx = Int((raw * Double(count - 1)).rounded())
+        let snapped = Double(idx) / Double(count - 1)
+        if hoverFrac == nil || abs(hoverFrac! - snapped) > 0.0001 {
+            hoverFrac = snapped
+        }
+    }
+
+    private func row(_ label: String, _ value: String) -> some View {
+        HStack {
+            Text(label)
+                .font(.system(size: 10, design: .rounded))
+                .foregroundStyle(Theme.textSecondary)
+            Spacer()
+            Text(value)
+                .font(.system(size: 11, weight: .medium, design: .rounded))
+                .monospacedDigit()
+                .foregroundStyle(.white)
+        }
+    }
+
+    private func value(_ data: [Double], fallback: Double) -> Int {
+        let v: Double = if let i = hoverIndex, data.indices.contains(i) { data[i] } else { fallback }
+        return Int((v * 100).rounded())
+    }
+
+    private func mbps(_ bytesPerSec: Double) -> String {
+        String(format: "%.1f", bytesPerSec / 1_000_000)
+    }
+
+    private func uptime(_ t: TimeInterval) -> String {
+        let total = Int(t)
+        let d = total / 86400, h = (total % 86400) / 3600, min = (total % 3600) / 60
+        if d > 0 { return "\(d)d \(h)h \(min)m" }
+        if h > 0 { return "\(h)h \(min)m" }
+        return "\(min)m"
+    }
+}
+
+private struct GraphCanvas: View, Equatable {
+    let mem: [Double]
+    let cpu: [Double]
+    let gpu: [Double]
+    let memColor: Color
+    let cpuColor: Color
+    let gpuColor: Color
+
+    var body: some View {
+        Canvas { ctx, size in
+            let baseline = Path { p in
+                p.move(to: CGPoint(x: 0, y: size.height / 2))
+                p.addLine(to: CGPoint(x: size.width, y: size.height / 2))
+            }
+            ctx.stroke(baseline, with: .color(.white.opacity(0.05)), lineWidth: 1)
+            drawLine(ctx, mem, size, memColor)
+            drawLine(ctx, cpu, size, cpuColor)
+            drawLine(ctx, gpu, size, gpuColor)
+        }
     }
 
     private func graphPoints(_ data: [Double], _ size: CGSize) -> [CGPoint] {
@@ -152,35 +209,5 @@ struct SystemStatsView: View {
 
         ctx.stroke(line, with: .color(color),
                    style: StrokeStyle(lineWidth: 2, lineCap: .round, lineJoin: .round))
-    }
-
-    private func row(_ label: String, _ value: String) -> some View {
-        HStack {
-            Text(label)
-                .font(.system(size: 10, design: .rounded))
-                .foregroundStyle(Theme.textSecondary)
-            Spacer()
-            Text(value)
-                .font(.system(size: 11, weight: .medium, design: .rounded))
-                .monospacedDigit()
-                .foregroundStyle(.white)
-        }
-    }
-
-    private func value(_ data: [Double], fallback: Double) -> Int {
-        let v: Double = if let i = hoverIndex, data.indices.contains(i) { data[i] } else { fallback }
-        return Int((v * 100).rounded())
-    }
-
-    private func mbps(_ bytesPerSec: Double) -> String {
-        String(format: "%.1f", bytesPerSec / 1_000_000)
-    }
-
-    private func uptime(_ t: TimeInterval) -> String {
-        let total = Int(t)
-        let d = total / 86400, h = (total % 86400) / 3600, min = (total % 3600) / 60
-        if d > 0 { return "\(d)d \(h)h \(min)m" }
-        if h > 0 { return "\(h)h \(min)m" }
-        return "\(min)m"
     }
 }

@@ -71,6 +71,7 @@ struct NotchView: View {
                         GearButton(action: onOpenSettings)
                         ShelfButton(viewModel: viewModel, count: shelf.count, accent: settings.accentColor)
                         BatteryIndicator(stats: stats)
+                            .padding(.leading, 4)
                     }
                     .padding(.leading, 16)
                     .frame(height: notchHeight)
@@ -157,22 +158,22 @@ private struct ShelfButton: View {
 
     var body: some View {
         Button { viewModel.showShelf.toggle() } label: {
-            ZStack(alignment: .topTrailing) {
-                Icon(.tray, size: 14, weight: 1.8)
-                    .foregroundStyle(.white.opacity(viewModel.showShelf ? 0.95 : (hover ? 0.9 : 0.42)))
-                    .frame(width: 22, height: 22)
-                    .background(Circle().fill(.white.opacity(viewModel.showShelf ? 0.16 : (hover ? 0.14 : 0))))
-                if count > 0 {
-                    Text("\(count)")
-                        .font(.system(size: 8, weight: .bold, design: .rounded))
-                        .foregroundStyle(.white)
-                        .padding(.horizontal, 2.5)
-                        .frame(minWidth: 12, minHeight: 12)
-                        .background(Circle().fill(accent))
-                        .offset(x: 5, y: -4)
+            Icon(.package, size: 14, weight: 1.8)
+                .foregroundStyle(.white.opacity(viewModel.showShelf ? 0.95 : (hover ? 0.9 : 0.42)))
+                .frame(width: 22, height: 22)
+                .background(Circle().fill(.white.opacity(viewModel.showShelf ? 0.16 : (hover ? 0.14 : 0))))
+                .overlay(alignment: .topTrailing) {
+                    if count > 0 {
+                        Text("\(count)")
+                            .font(.system(size: 7.5, weight: .bold, design: .rounded))
+                            .foregroundStyle(.white)
+                            .padding(.horizontal, 2.5)
+                            .frame(minWidth: 11, minHeight: 11)
+                            .background(Capsule().fill(accent))
+                            .offset(x: 1, y: -3)
+                    }
                 }
-            }
-            .contentShape(Rectangle())
+                .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .onHover { hover = $0 }
@@ -186,7 +187,7 @@ private struct GearButton: View {
 
     var body: some View {
         Button(action: action) {
-            Icon(.settings, size: 13, weight: 1.8)
+            Icon(.settings, size: 14, weight: 1.8)
                 .foregroundStyle(.white.opacity(hover ? 0.9 : 0.4))
                 .frame(width: 22, height: 22)
                 .background(Circle().fill(.white.opacity(hover ? 0.14 : 0)))

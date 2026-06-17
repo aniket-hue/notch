@@ -28,13 +28,6 @@ struct SlotContext: Equatable {
     }
 }
 
-private struct SlotContextKey: EnvironmentKey {
-    static let defaultValue: SlotContext = .standalone
-}
-
 extension EnvironmentValues {
-    var slotContext: SlotContext {
-        get { self[SlotContextKey.self] }
-        set { self[SlotContextKey.self] = newValue }
-    }
+    @Entry var slotContext: SlotContext = .standalone
 }

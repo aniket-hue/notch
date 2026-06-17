@@ -1,22 +1,21 @@
 import SwiftUI
 
+private enum ClipMetrics {
+    static let cardWidth: CGFloat = 104
+    static let cardHeight: CGFloat = 86
+    static let cardGap: CGFloat = 9
+}
+
 struct ClipboardView: View {
     @ObservedObject var service: ClipboardService
     @EnvironmentObject var settings: Settings
 
     @Environment(\.slotContext) private var slot
 
-    @State private var copiedID: UUID?
-    @State private var hoveredID: UUID?
     @State private var offset: CGFloat = 0
 
-    private let cardWidth: CGFloat = 104
-    private let cardHeight: CGFloat = 86
-    private let cardGap: CGFloat = 9
-    private let linkColor = Color(red: 0.36, green: 0.62, blue: 1.0)
-    private let codeColor = Color(red: 0.30, green: 0.86, blue: 0.52)
-
-    private enum Category { case plain, url, color, code }
+    private let cardWidth = ClipMetrics.cardWidth
+    private let cardGap = ClipMetrics.cardGap
 
     var body: some View {
         GeometryReader { geo in
@@ -32,7 +31,7 @@ struct ClipboardView: View {
                     emptyState
                 } else {
                     HStack(spacing: cardGap) {
-                        ForEach(service.items) { card($0) }
+                        ForEach(service.items) { ClipCard(item: $0, service: service) }
                     }
                     .offset(x: -min(offset, maxOffset))
                     .frame(width: viewport, alignment: .topLeading)
@@ -99,17 +98,29 @@ struct ClipboardView: View {
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
+}
 
-    private func card(_ item: ClipItem) -> some View {
-        let hovered = hoveredID == item.id
-        let copied = copiedID == item.id
+private struct ClipCard: View {
+    let item: ClipItem
+    let service: ClipboardService
+    @EnvironmentObject var settings: Settings
+
+    @State private var hovered = false
+    @State private var copied = false
+
+    private let cardWidth = ClipMetrics.cardWidth
+    private let cardHeight = ClipMetrics.cardHeight
+    private let linkColor = Color(red: 0.36, green: 0.62, blue: 1.0)
+    private let codeColor = Color(red: 0.30, green: 0.86, blue: 0.52)
+
+    enum Category { case plain, url, color, code }
+
+    var body: some View {
         let cat = category(item)
-        return Button {
+        Button {
             service.copyBack(item)
-            copiedID = item.id
-            DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
-                if copiedID == item.id { copiedID = nil }
-            }
+            copied = true
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1) { copied = false }
         } label: {
             preview(item, cat: cat, hovered: hovered)
                 .frame(width: cardWidth, height: cardHeight)
@@ -122,10 +133,7 @@ struct ClipboardView: View {
                 .animation(.easeOut(duration: 0.13), value: hovered)
         }
         .buttonStyle(.plain)
-        .onHover { inside in
-            if inside { hoveredID = item.id }
-            else if hoveredID == item.id { hoveredID = nil }
-        }
+        .onHover { hovered = $0 }
     }
 
     private var copiedOverlay: some View {

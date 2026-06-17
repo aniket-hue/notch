@@ -93,7 +93,7 @@ struct ClaudeUsageProvider: UsageProvider {
                 let project = cwd.isEmpty ? "—" : (cwd as NSString).lastPathComponent
                 let session = obj["sessionId"] as? String ?? mid
                 let key = modelKey(message["model"] as? String ?? "")
-                let cost = self.cost(key: key, usage: usage)
+                let cost = cost(key: key, usage: usage)
 
                 var edits: [String] = []
                 if let blocks = message["content"] as? [[String: Any]] {
@@ -149,7 +149,9 @@ struct ClaudeUsageProvider: UsageProvider {
             projSessions[m.project, default: []].insert(m.session)
             modelCost[m.key, default: 0] += m.cost
             sessions.insert(m.session)
-            for f in m.editFiles { files.insert(f) }
+            for f in m.editFiles {
+                files.insert(f)
+            }
         }
 
         let projects = projCost

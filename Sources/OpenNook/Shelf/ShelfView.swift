@@ -14,36 +14,36 @@ struct ShelfView: View {
     private let cardGap: CGFloat = 9
     private let linkColor = Color(red: 0.36, green: 0.62, blue: 1.0)
 
+    private let hPad: CGFloat = 8
+
     var body: some View {
         GeometryReader { geo in
-            let viewport = geo.size.width
+            let viewport = geo.size.width - hPad * 2
             let content = CGFloat(service.items.count) * (cardWidth + cardGap) - cardGap
             let maxOffset = max(0, content - viewport)
-            VStack(alignment: .leading, spacing: 8) {
+            let pos = min(offset, maxOffset)
+            let faded: Edge.Set = (pos > 1 ? .leading : Edge.Set()).union(pos < maxOffset - 1 ? .trailing : Edge.Set())
+            VStack(alignment: .leading, spacing: 6) {
                 header(viewport: viewport, maxOffset: maxOffset)
-                Group {
-                    if service.items.isEmpty {
-                        emptyState
-                    } else {
-                        HStack(spacing: cardGap) {
-                            ForEach(service.items) { card($0) }
-                        }
-                        .offset(x: -min(offset, maxOffset))
-                        .frame(width: viewport, alignment: .leading)
-                        .clipped()
+                if service.items.isEmpty {
+                    emptyState.frame(height: cardHeight)
+                } else {
+                    HStack(spacing: cardGap) {
+                        ForEach(service.items) { card($0) }
                     }
+                    .frame(height: cardHeight)
+                    .offset(x: -pos)
+                    .frame(width: viewport, height: cardHeight + 12, alignment: .leading)
+                    .edgeFade(faded)
                 }
-                .frame(height: cardHeight)
             }
+            .padding(.horizontal, hPad)
         }
-        .frame(height: cardHeight + 30)
+        .frame(height: cardHeight + 40)
     }
 
     private func header(viewport: CGFloat, maxOffset: CGFloat) -> some View {
         HStack(spacing: 7) {
-            Text("Shelf")
-                .font(.system(size: 11, weight: .semibold, design: .rounded))
-                .foregroundStyle(.white.opacity(0.9))
             Spacer()
             if maxOffset > 0 {
                 navButton(.chevronLeft, enabled: offset > 1) {

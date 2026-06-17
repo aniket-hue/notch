@@ -8,6 +8,7 @@ final class NotchWindowController {
     private let viewModel: NotchViewModel
     private var container: NotchContainerView!
     private var hoverMonitor: HoverMonitor!
+    private var shelfDrop: ShelfDropController!
     private let stats = SystemStatsService()
     private let nowPlaying = NowPlayingService()
     private let clipboard = ClipboardService()
@@ -32,6 +33,7 @@ final class NotchWindowController {
         usage.start()
         buildPanel()
         hoverMonitor = HoverMonitor(viewModel: viewModel, panel: panel)
+        shelfDrop = ShelfDropController(viewModel: viewModel, shelf: shelf)
         observeSettings()
 
         NotificationCenter.default.addObserver(
@@ -88,7 +90,7 @@ final class NotchWindowController {
         let frame = windowFrame(for: viewModel.metrics)
 
         let panel = NotchPanel(contentRect: frame)
-        let container = NotchContainerView(viewModel: viewModel, shelf: shelf)
+        let container = NotchContainerView(viewModel: viewModel)
         container.frame = NSRect(origin: .zero, size: frame.size)
         container.autoresizingMask = [.width, .height]
 
@@ -115,119 +117,35 @@ final class NotchWindowController {
     @objc private func screenParametersChanged() {
         viewModel.metrics = ScreenGeometry.current()
         panel.setFrame(windowFrame(for: viewModel.metrics), display: true)
+        shelfDrop.updateMetrics()
     }
 }
 
 final class NotchContainerView: NSView {
     private let viewModel: NotchViewModel
-    private let shelf: ShelfService
-    private var isDragging = false
 
-    init(viewModel: NotchViewModel, shelf: ShelfService) {
+    init(viewModel: NotchViewModel) {
         self.viewModel = viewModel
-        self.shelf = shelf
         super.init(frame: .zero)
-        registerForDraggedTypes([.fileURL])
     }
 
     @available(*, unavailable)
     required init?(coder _: NSCoder) { fatalError("init(coder:) has not been implemented") }
 
-    private func contentSize() -> CGSize {
-        MainActor.assumeIsolated {
+    override func hitTest(_ point: NSPoint) -> NSView? {
+        let size = MainActor.assumeIsolated { () -> CGSize in
             if viewModel.isOpen {
                 return viewModel.openContentSize == .zero ? viewModel.closedSize : viewModel.openContentSize
             }
             return viewModel.closedSize
         }
-    }
-
-    private func contentRect() -> NSRect {
-        let size = contentSize()
-        return NSRect(
+        let rect = NSRect(
             x: (bounds.width - size.width) / 2,
             y: bounds.height - size.height,
             width: size.width,
             height: size.height,
         )
-    }
-
-    private func triggerRect() -> NSRect {
-        let isOpen = MainActor.assumeIsolated { viewModel.isOpen }
-        if isOpen { return contentRect() }
-        let size = contentSize()
-        let w = size.width + 60
-        let h = size.height + 16
-        return NSRect(x: (bounds.width - w) / 2, y: bounds.height - h, width: w, height: h)
-    }
-
-    override func hitTest(_ point: NSPoint) -> NSView? {
-        if isDragging {
-            return triggerRect().contains(point) ? self : nil
-        }
-        let isOpen = MainActor.assumeIsolated { viewModel.isOpen }
-        if isOpen {
-            guard contentRect().contains(point) else { return nil }
-            return super.hitTest(point)
-        }
-        return triggerRect().contains(point) ? self : nil
-    }
-
-    private func hasFiles(_ sender: NSDraggingInfo) -> Bool {
-        sender.draggingPasteboard.canReadObject(forClasses: [NSURL.self], options: [.urlReadingFileURLsOnly: true])
-    }
-
-    override func draggingEntered(_ sender: NSDraggingInfo) -> NSDragOperation {
-        if hasFiles(sender) { isDragging = true }
-        return dragUpdate(sender)
-    }
-
-    override func draggingUpdated(_ sender: NSDraggingInfo) -> NSDragOperation {
-        dragUpdate(sender)
-    }
-
-    private func dragUpdate(_ sender: NSDraggingInfo) -> NSDragOperation {
-        let point = convert(sender.draggingLocation, from: nil)
-        guard hasFiles(sender), triggerRect().contains(point) else {
-            MainActor.assumeIsolated { viewModel.dropActive = false }
-            return []
-        }
-        MainActor.assumeIsolated {
-            viewModel.open()
-            viewModel.showShelf = true
-            viewModel.dropActive = true
-        }
-        return .copy
-    }
-
-    override func draggingExited(_: NSDraggingInfo?) {
-        isDragging = false
-        MainActor.assumeIsolated {
-            viewModel.dropActive = false
-            viewModel.scheduleClose()
-        }
-    }
-
-    override func draggingEnded(_: NSDraggingInfo) {
-        isDragging = false
-    }
-
-    override func prepareForDragOperation(_ sender: NSDraggingInfo) -> Bool {
-        hasFiles(sender)
-    }
-
-    override func performDragOperation(_ sender: NSDraggingInfo) -> Bool {
-        isDragging = false
-        guard let urls = sender.draggingPasteboard.readObjects(
-            forClasses: [NSURL.self],
-            options: [.urlReadingFileURLsOnly: true],
-        ) as? [URL], !urls.isEmpty else { return false }
-        MainActor.assumeIsolated {
-            viewModel.open()
-            viewModel.showShelf = true
-            viewModel.dropActive = false
-            shelf.addFiles(urls)
-        }
-        return true
+        guard rect.contains(point) else { return nil }
+        return super.hitTest(point)
     }
 }

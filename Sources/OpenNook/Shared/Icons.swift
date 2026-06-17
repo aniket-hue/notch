@@ -12,6 +12,9 @@ enum OIcon: String {
     case calendar
     case calendarClear = "calendar-clear"
     case lock, video, grip, git, eye, copy, open, tray, stack
+    case package, archive, folders
+    case boxArrowDown = "box-arrow-down"
+    case cardsThree = "cards-three"
     case eyeSlash = "eye-slash"
     case checkCircle = "check-circle"
     case xCircle = "x-circle"
