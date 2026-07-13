@@ -54,7 +54,7 @@ final class ShelfDropController {
 
     private func handleExit() {
         viewModel.dropActive = false
-        viewModel.scheduleClose()
+        viewModel.collapse()
         positionClosed()
     }
 

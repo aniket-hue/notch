@@ -16,6 +16,7 @@ final class NotchWindowController {
     private let github = GitHubService()
     private let usage = UsageService()
     private let shelf = ShelfService()
+    private let mic = MicService()
     private let registry: WidgetRegistry
     private let settings = Settings()
     private lazy var settingsWindow = SettingsWindowController(settings: settings, registry: registry, clipboard: clipboard, github: github)
@@ -61,15 +62,20 @@ final class NotchWindowController {
                 MainActor.assumeIsolated { self?.updateArtGradient() }
             }
             .store(in: &cancellables)
+
+        nowPlaying.$now
+            .map(\.hasTrack)
+            .removeDuplicates()
+            .receive(on: RunLoop.main)
+            .sink { [weak self] active in
+                MainActor.assumeIsolated { self?.viewModel.setActivity(active) }
+            }
+            .store(in: &cancellables)
     }
 
     private func updateArtGradient() {
         let now = nowPlaying.now
-        if now.hasTrack, let art = now.artwork {
-            viewModel.artGradient = ColorExtractor.gradientColors(from: art)
-        } else {
-            viewModel.artGradient = []
-        }
+        viewModel.artGradient = now.hasTrack ? now.gradient : []
     }
 
     private func windowFrame(for metrics: NotchMetrics) -> NSRect {
@@ -98,8 +104,9 @@ final class NotchWindowController {
             viewModel: viewModel,
             settings: settings,
             shelf: shelf,
+            nowPlaying: nowPlaying,
+            mic: mic,
             registry: registry,
-            stats: stats,
             onOpenSettings: { [weak self] in self?.openSettings() },
         ))
         hosting.frame = container.bounds
@@ -134,10 +141,14 @@ final class NotchContainerView: NSView {
 
     override func hitTest(_ point: NSPoint) -> NSView? {
         let size = MainActor.assumeIsolated { () -> CGSize in
-            if viewModel.isOpen {
+            switch viewModel.state {
+            case .open:
                 return viewModel.openContentSize == .zero ? viewModel.closedSize : viewModel.openContentSize
+            case .compact:
+                return viewModel.compactSize
+            case .closed:
+                return viewModel.closedSize
             }
-            return viewModel.closedSize
         }
         let rect = NSRect(
             x: (bounds.width - size.width) / 2,

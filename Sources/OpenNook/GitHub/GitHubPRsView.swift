@@ -1,5 +1,9 @@
 import SwiftUI
 
+private let ghGreen = Color(red: 0.40, green: 0.89, blue: 0.60)
+private let ghRed = Color(red: 0.95, green: 0.45, blue: 0.42)
+private let ghAmber = Color(red: 1.0, green: 0.74, blue: 0.38)
+
 private struct GHScrollYKey: PreferenceKey {
     static let defaultValue: CGFloat = 0
     static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) { value = nextValue() }
@@ -18,14 +22,9 @@ private struct GHViewportHKey: PreferenceKey {
 struct GitHubPRsView: View {
     @ObservedObject var service: GitHubService
     @EnvironmentObject var settings: Settings
-    @State private var copied: String?
     @State private var scrollY: CGFloat = 0
     @State private var contentH: CGFloat = 0
     @State private var viewportH: CGFloat = 0
-
-    private let green = Color(red: 0.40, green: 0.89, blue: 0.60)
-    private let red = Color(red: 0.95, green: 0.45, blue: 0.42)
-    private let amber = Color(red: 1.0, green: 0.74, blue: 0.38)
 
     private var review: [PullRequest] {
         service.prs.filter { $0.kind == .review }
@@ -63,11 +62,11 @@ struct GitHubPRsView: View {
             let faded: Edge.Set = (scrolled ? .top : Edge.Set()).union(moreBelow ? .bottom : Edge.Set())
             ScrollView(.vertical, showsIndicators: false) {
                 VStack(spacing: 0) {
-                    ForEach(review) { row($0) }
+                    ForEach(review) { PRRow(pr: $0, service: service) }
                     if !review.isEmpty, !mine.isEmpty {
-                        Color.clear.frame(height: 12)
+                        sectionDivider
                     }
-                    ForEach(mine) { row($0) }
+                    ForEach(mine) { PRRow(pr: $0, service: service) }
                 }
                 .background(GeometryReader { g in
                     Color.clear
@@ -92,24 +91,68 @@ struct GitHubPRsView: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
-    private func row(_ pr: PullRequest) -> some View {
-        HStack(spacing: 11) {
-            avatar(pr)
-            VStack(alignment: .leading, spacing: 3) {
-                Button { copyLink(pr) } label: {
-                    Text(pr.title)
-                        .font(.system(size: 13.5, weight: .medium, design: .rounded))
-                        .foregroundStyle(.white)
-                        .lineLimit(1)
-                        .contentShape(Rectangle())
+    private var sectionDivider: some View {
+        HStack(spacing: 8) {
+            Text("MINE")
+                .font(.system(size: 9, weight: .bold, design: .rounded))
+                .tracking(0.6)
+                .foregroundStyle(.white.opacity(0.3))
+            Rectangle().fill(.white.opacity(0.1)).frame(height: 0.5)
+        }
+        .padding(.top, 12)
+        .padding(.bottom, 6)
+    }
+
+    private func message(_ title: String, _ subtitle: String) -> some View {
+        VStack(spacing: 4) {
+            Text(title)
+                .font(.system(size: 12, weight: .semibold, design: .rounded))
+                .foregroundStyle(Theme.textSecondary)
+            Text(subtitle)
+                .font(.system(size: 10, design: .rounded))
+                .foregroundStyle(Theme.textTertiary)
+                .multilineTextAlignment(.center)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+}
+
+private struct PRRow: View {
+    let pr: PullRequest
+    let service: GitHubService
+    @EnvironmentObject var settings: Settings
+
+    @State private var hovered = false
+    @State private var copied = false
+    @State private var expanded = false
+    @State private var approvePending = false
+    @State private var approveWork: DispatchWorkItem?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(spacing: 11) {
+                avatar
+                VStack(alignment: .leading, spacing: 3) {
+                    Button { copyLink() } label: {
+                        Text(pr.title)
+                            .font(.system(size: 13.5, weight: .medium, design: .rounded))
+                            .foregroundStyle(.white)
+                            .lineLimit(1)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .help("Copy link")
+                    metaLine
                 }
-                .buttonStyle(.plain)
-                .help("Copy link")
-                metaLine(pr)
+                Spacer(minLength: 6)
+                if pr.kind == .review {
+                    rightAction.frame(minWidth: 26, alignment: .trailing)
+                }
             }
-            Spacer(minLength: 6)
-            if pr.kind == .review {
-                approveButton(pr)
+            if expanded, !pr.checks.isEmpty {
+                checksPanel
+                    .padding(.leading, 41)
+                    .padding(.top, 7)
             }
         }
         .padding(.vertical, 9)
@@ -118,57 +161,251 @@ struct GitHubPRsView: View {
         }
         .contentShape(Rectangle())
         .onTapGesture { service.open(pr) }
+        .onHover { hovered = $0 }
         .draggable(pr.url)
     }
 
-    private func copyLink(_ pr: PullRequest) {
-        service.copyLink(pr)
-        copied = pr.id
-        DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
-            if copied == pr.id { copied = nil }
+    @ViewBuilder
+    private var rightAction: some View {
+        if approvePending {
+            Button { undo() } label: {
+                HStack(spacing: 5) {
+                    Text("Approving")
+                        .font(.system(size: 11, design: .rounded))
+                        .foregroundStyle(ghGreen.opacity(0.85))
+                    Text("Undo")
+                        .font(.system(size: 11, weight: .semibold, design: .rounded))
+                        .foregroundStyle(settings.accentColor)
+                }
+                .padding(.horizontal, 10)
+                .padding(.vertical, 5)
+                .background(Capsule().fill(.white.opacity(0.07)))
+                .contentShape(Capsule())
+            }
+            .buttonStyle(.plain)
+        } else if service.approving.contains(pr.id) {
+            ProgressView().controlSize(.mini).scaleEffect(0.6).frame(width: 22, height: 22)
+        } else if hovered {
+            Button { startApprove() } label: {
+                Icon(.check, size: 12, weight: 2.6)
+                    .foregroundStyle(ghGreen)
+                    .frame(width: 26, height: 26)
+                    .background(
+                        Circle().fill(ghGreen.opacity(0.14))
+                            .overlay(Circle().strokeBorder(ghGreen.opacity(0.4), lineWidth: 1)),
+                    )
+                    .contentShape(Circle())
+            }
+            .buttonStyle(.plain)
+            .help("Approve")
+            .transition(.opacity)
         }
     }
 
-    private func metaLine(_ pr: PullRequest) -> some View {
+    private func startApprove() {
+        approveWork?.cancel()
+        approvePending = true
+        let work = DispatchWorkItem {
+            approvePending = false
+            service.approve(pr)
+        }
+        approveWork = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + 4, execute: work)
+    }
+
+    private func undo() {
+        approveWork?.cancel()
+        approveWork = nil
+        approvePending = false
+    }
+
+    private func copyLink() {
+        service.copyLink(pr)
+        copied = true
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) { copied = false }
+    }
+
+    private var metaLine: some View {
         HStack(spacing: 7) {
-            if copied == pr.id {
-                Icon(.check, size: 11, weight: 2.4).foregroundStyle(green)
+            if copied {
+                Icon(.check, size: 11, weight: 2.4).foregroundStyle(ghGreen)
                 Text("Link copied")
                     .font(.system(size: 11, design: .rounded))
-                    .foregroundStyle(green)
+                    .foregroundStyle(ghGreen)
             } else {
                 Text(verbatim: "\(pr.repoShort) · #\(pr.number) · \(ago(pr.updatedAt))")
                     .font(.system(size: 11, design: .rounded))
                     .foregroundStyle(Theme.textTertiary)
                     .lineLimit(1)
                     .layoutPriority(1)
-                ciInline(pr.ci)
+                ciButton
                 if pr.kind == .mine { reviewInline(pr.review) }
             }
             Spacer(minLength: 0)
         }
     }
 
+    private var ciButton: some View {
+        let expandable = !pr.checks.isEmpty
+        return Button {
+            if expandable { withAnimation(.easeOut(duration: 0.18)) { expanded.toggle() } }
+        } label: {
+            HStack(spacing: 4) {
+                ciGlyph(pr.ci).frame(width: 11, height: 11)
+                if let text = ciCountText {
+                    Text(text)
+                        .font(.system(size: 10.5, weight: .bold, design: .rounded))
+                        .monospacedDigit()
+                        .foregroundStyle(ciColor)
+                }
+                if expandable {
+                    Image(systemName: expanded ? "chevron.up" : "chevron.down")
+                        .font(.system(size: 7, weight: .bold))
+                        .foregroundStyle(ciColor.opacity(0.8))
+                }
+            }
+            .frame(height: 14)
+            .padding(.horizontal, 6)
+            .padding(.vertical, 2)
+            .background(Capsule().fill(ciColor.opacity(0.16)))
+            .contentShape(Capsule())
+        }
+        .buttonStyle(.plain)
+        .disabled(!expandable)
+    }
+
+    private var ciColor: Color {
+        switch pr.ci {
+        case .pass: ghGreen
+        case .fail: ghRed
+        case .pending: ghAmber
+        case .none: .white.opacity(0.3)
+        }
+    }
+
+    private var ciCountText: String? {
+        let total = pr.checks.count
+        guard total > 0 else { return nil }
+        let failed = pr.checks.count(where: { $0.state == .fail })
+        let done = pr.checks.count(where: { $0.state == .pass || $0.state == .fail || $0.state == .skipped })
+        switch pr.ci {
+        case .pass: return "\(total)"
+        case .fail: return "\(failed)"
+        case .pending: return "\(done)/\(total)"
+        case .none: return nil
+        }
+    }
+
     @ViewBuilder
-    private func ciInline(_ ci: PullRequest.CI) -> some View {
+    private func ciGlyph(_ ci: PullRequest.CI) -> some View {
         switch ci {
-        case .pass:
-            Icon(.checkCircle, size: 13, weight: 2).foregroundStyle(green)
-        case .fail:
-            Icon(.xCircle, size: 13, weight: 2).foregroundStyle(red)
+        case .pass: Icon(.checkCircle, size: 11, weight: 2.2).foregroundStyle(ghGreen)
+        case .fail: Icon(.xCircle, size: 11, weight: 2.2).foregroundStyle(ghRed)
+        case .pending: Circle().strokeBorder(ghAmber, lineWidth: 1.5).frame(width: 9, height: 9)
+        case .none: Text("–").font(.system(size: 11, weight: .bold, design: .rounded)).foregroundStyle(.white.opacity(0.4))
+        }
+    }
+
+    private var checksPanel: some View {
+        let rank: (PullRequest.CheckState) -> Int = { s in
+            switch s {
+            case .fail: 0
+            case .running: 1
+            case .pending: 2
+            case .pass: 3
+            case .skipped: 4
+            }
+        }
+        let sorted = pr.checks.enumerated().sorted {
+            rank($0.element.state) != rank($1.element.state)
+                ? rank($0.element.state) < rank($1.element.state)
+                : $0.offset < $1.offset
+        }.map(\.element)
+        return VStack(alignment: .leading, spacing: 0) {
+            ForEach(Array(sorted.enumerated()), id: \.element.id) { index, check in
+                if index > 0 {
+                    Rectangle().fill(.white.opacity(0.05)).frame(height: 0.5)
+                }
+                checkRow(check)
+            }
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 3)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(RoundedRectangle(cornerRadius: 10).fill(.white.opacity(0.05)))
+        .padding(.trailing, 4)
+    }
+
+    private func checkRow(_ check: PullRequest.Check) -> some View {
+        Button {
+            if let url = check.url { service.openURL(url) }
+        } label: {
+            HStack(spacing: 8) {
+                checkGlyph(check.state)
+                Text(check.name)
+                    .font(.system(size: 12, weight: .medium, design: .rounded))
+                    .foregroundStyle(nameColor(check.state))
+                    .lineLimit(1)
+                Spacer(minLength: 6)
+                checkTrailing(check)
+            }
+            .padding(.vertical, 4)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .disabled(check.url == nil)
+    }
+
+    private func nameColor(_ state: PullRequest.CheckState) -> Color {
+        switch state {
+        case .fail: Color(red: 0.99, green: 0.66, blue: 0.66)
+        case .skipped: .white.opacity(0.38)
+        default: .white.opacity(0.9)
+        }
+    }
+
+    @ViewBuilder
+    private func checkTrailing(_ check: PullRequest.Check) -> some View {
+        switch check.state {
+        case .fail where check.url != nil:
+            HStack(spacing: 3) {
+                Text("View log").font(.system(size: 10.5, weight: .semibold, design: .rounded))
+                Image(systemName: "arrow.up.right").font(.system(size: 8, weight: .bold))
+            }
+            .foregroundStyle(ghRed)
+        case .running:
+            Text("running").font(.system(size: 10.5, weight: .medium, design: .rounded)).foregroundStyle(ghAmber)
         case .pending:
-            Circle().strokeBorder(amber, lineWidth: 1.5).frame(width: 10, height: 10)
-        case .none:
-            EmptyView()
+            Text("queued").font(.system(size: 10.5, weight: .medium, design: .rounded)).foregroundStyle(ghAmber.opacity(0.85))
+        case .skipped:
+            Text("skipped").font(.system(size: 10.5, weight: .medium, design: .rounded)).foregroundStyle(.white.opacity(0.3))
+        default:
+            if let duration = check.duration {
+                Text(duration)
+                    .font(.system(size: 10.5, weight: .medium, design: .rounded))
+                    .monospacedDigit()
+                    .foregroundStyle(.white.opacity(0.4))
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func checkGlyph(_ state: PullRequest.CheckState) -> some View {
+        switch state {
+        case .pass: Icon(.check, size: 10, weight: 2.4).foregroundStyle(ghGreen).frame(width: 12)
+        case .fail: Image(systemName: "xmark").font(.system(size: 9, weight: .bold)).foregroundStyle(ghRed).frame(width: 12)
+        case .running: Circle().trim(from: 0, to: 0.7).stroke(ghAmber, lineWidth: 1.6).frame(width: 10, height: 10)
+        case .pending: Circle().strokeBorder(ghAmber.opacity(0.6), lineWidth: 1.6).frame(width: 10, height: 10)
+        case .skipped: Circle().fill(.white.opacity(0.25)).frame(width: 6, height: 6).frame(width: 12)
         }
     }
 
     @ViewBuilder
     private func reviewInline(_ review: PullRequest.Review) -> some View {
         switch review {
-        case .approved: dotText("Approved", green)
-        case .changes: dotText("Changes", red)
-        case .pending: dotText("In review", amber)
+        case .approved: dotText("Approved", ghGreen)
+        case .changes: dotText("Changes", ghRed)
+        case .pending: dotText("In review", ghAmber)
         case .none: EmptyView()
         }
     }
@@ -184,51 +421,8 @@ struct GitHubPRsView: View {
         }
     }
 
-    private func approveButton(_ pr: PullRequest) -> some View {
-        Button { service.approve(pr) } label: {
-            HStack(spacing: 5) {
-                if service.approving.contains(pr.id) {
-                    ProgressView().controlSize(.mini).scaleEffect(0.55).frame(width: 12, height: 12)
-                } else {
-                    Icon(.check, size: 11, weight: 2.4)
-                }
-                Text("Approve").font(.system(size: 11, weight: .semibold, design: .rounded))
-            }
-            .foregroundStyle(green)
-            .padding(.horizontal, 11)
-            .padding(.vertical, 6)
-            .background(Capsule().strokeBorder(green.opacity(0.45), lineWidth: 1))
-        }
-        .buttonStyle(.plain)
-    }
-
-    private func avatar(_ pr: PullRequest) -> some View {
-        AsyncImage(url: pr.avatarURL) { image in
-            image.resizable().scaledToFill()
-        } placeholder: {
-            ZStack {
-                Circle().fill(.white.opacity(0.1))
-                Text(String(pr.author.prefix(1)).uppercased())
-                    .font(.system(size: 12, weight: .semibold, design: .rounded))
-                    .foregroundStyle(.white.opacity(0.6))
-            }
-        }
-        .frame(width: 30, height: 30)
-        .clipShape(Circle())
-        .overlay(Circle().strokeBorder(.white.opacity(0.08), lineWidth: 1))
-    }
-
-    private func message(_ title: String, _ subtitle: String) -> some View {
-        VStack(spacing: 4) {
-            Text(title)
-                .font(.system(size: 12, weight: .semibold, design: .rounded))
-                .foregroundStyle(Theme.textSecondary)
-            Text(subtitle)
-                .font(.system(size: 10, design: .rounded))
-                .foregroundStyle(Theme.textTertiary)
-                .multilineTextAlignment(.center)
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    private var avatar: some View {
+        CachedAvatar(url: pr.avatarURL, fallback: String(pr.author.prefix(1)).uppercased())
     }
 
     private func ago(_ date: Date) -> String {
@@ -237,5 +431,44 @@ struct GitHubPRsView: View {
         if s < 3600 { return "\(s / 60)m" }
         if s < 86400 { return "\(s / 3600)h" }
         return "\(s / 86400)d"
+    }
+}
+
+private enum AvatarCache {
+    static let shared = NSCache<NSURL, NSImage>()
+}
+
+private struct CachedAvatar: View {
+    let url: URL?
+    let fallback: String
+    @State private var image: NSImage?
+
+    var body: some View {
+        ZStack {
+            if let image {
+                Image(nsImage: image).resizable().scaledToFill()
+            } else {
+                Circle().fill(.white.opacity(0.1))
+                Text(fallback)
+                    .font(.system(size: 12, weight: .semibold, design: .rounded))
+                    .foregroundStyle(.white.opacity(0.6))
+            }
+        }
+        .frame(width: 30, height: 30)
+        .clipShape(Circle())
+        .overlay(Circle().strokeBorder(.white.opacity(0.08), lineWidth: 1))
+        .task(id: url) { await load() }
+    }
+
+    private func load() async {
+        guard let url else { return }
+        if let cached = AvatarCache.shared.object(forKey: url as NSURL) {
+            image = cached
+            return
+        }
+        guard let (data, _) = try? await URLSession.shared.data(from: url),
+              let img = NSImage(data: data) else { return }
+        AvatarCache.shared.setObject(img, forKey: url as NSURL)
+        image = img
     }
 }

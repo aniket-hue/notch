@@ -1,5 +1,5 @@
 import AppKit
-import ImageIO
+import QuickLookThumbnailing
 import UniformTypeIdentifiers
 
 struct ShelfItem: Identifiable, Equatable {
@@ -12,8 +12,11 @@ struct ShelfItem: Identifiable, Equatable {
     let addedAt: Date
     let bytes: Int64
     var thumbnail: NSImage?
+    var hasPreview: Bool
 
-    static func == (a: ShelfItem, b: ShelfItem) -> Bool { a.id == b.id }
+    static func == (a: ShelfItem, b: ShelfItem) -> Bool {
+        a.id == b.id && a.thumbnail === b.thumbnail && a.hasPreview == b.hasPreview
+    }
 }
 
 private struct StoredShelfItem: Codable {
@@ -41,6 +44,7 @@ final class ShelfService: ObservableObject {
     private let dir: URL?
     private let metaURL: URL?
     private let saveQueue = DispatchQueue(label: "opennook.shelf.save")
+    private let ioQueue = DispatchQueue(label: "opennook.shelf.io", qos: .userInitiated)
 
     private static let imageExts: Set<String> = ["png", "jpg", "jpeg", "gif", "heic", "heif", "webp", "tiff", "tif", "bmp"]
 
@@ -56,35 +60,21 @@ final class ShelfService: ObservableObject {
 
     func addFiles(_ urls: [URL]) {
         guard let dir else { return }
-        var added = false
         for src in urls {
             guard src.isFileURL else {
-                if src.scheme != nil { addLink(src); added = true }
+                if src.scheme != nil { addLink(src) }
                 continue
             }
-            let id = UUID()
-            let sub = dir.appendingPathComponent(id.uuidString, isDirectory: true)
-            let staged = sub.appendingPathComponent(src.lastPathComponent)
-            do {
-                try FileManager.default.createDirectory(at: sub, withIntermediateDirectories: true)
-                try FileManager.default.copyItem(at: src, to: staged)
-            } catch { continue }
-            let isImage = Self.imageExts.contains(src.pathExtension.lowercased())
-            let bytes = Int64((try? staged.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0)
-            let item = ShelfItem(
-                id: id,
-                kind: isImage ? .image : .file,
-                url: staged,
-                text: nil,
-                name: src.lastPathComponent,
-                addedAt: Date(),
-                bytes: bytes,
-                thumbnail: isImage ? Self.thumbnail(staged) : nil,
-            )
-            items.insert(item, at: 0)
-            added = true
+            ioQueue.async { [weak self] in
+                guard let item = Self.stage(src, in: dir) else { return }
+                DispatchQueue.main.async {
+                    guard let self else { return }
+                    self.items.insert(item, at: 0)
+                    self.persist()
+                    if let url = item.url { self.loadThumbnail(id: item.id, url: url) }
+                }
+            }
         }
-        if added { persist() }
     }
 
     func addLink(_ url: URL) {
@@ -97,6 +87,7 @@ final class ShelfService: ObservableObject {
             addedAt: Date(),
             bytes: 0,
             thumbnail: nil,
+            hasPreview: false,
         )
         items.insert(item, at: 0)
         persist()
@@ -136,6 +127,26 @@ final class ShelfService: ObservableObject {
         return NSItemProvider()
     }
 
+    private func loadThumbnail(id: UUID, url: URL) {
+        let scale = NSScreen.main?.backingScaleFactor ?? 2
+        let request = QLThumbnailGenerator.Request(
+            fileAt: url,
+            size: CGSize(width: 104, height: 86),
+            scale: scale,
+            representationTypes: .all,
+        )
+        QLThumbnailGenerator.shared.generateBestRepresentation(for: request) { [weak self] rep, _ in
+            guard let rep else { return }
+            let image = rep.nsImage
+            let isPreview = rep.type != .icon
+            DispatchQueue.main.async {
+                guard let self, let idx = self.items.firstIndex(where: { $0.id == id }) else { return }
+                self.items[idx].thumbnail = image
+                self.items[idx].hasPreview = isPreview
+            }
+        }
+    }
+
     private func load() {
         guard let metaURL, let dir,
               let data = try? Data(contentsOf: metaURL),
@@ -144,12 +155,10 @@ final class ShelfService: ObservableObject {
         for dto in stored {
             let kind = ShelfItem.Kind(rawValue: dto.kind) ?? .file
             var url: URL?
-            var thumb: NSImage?
             if kind == .file || kind == .image {
                 let candidate = dir.appendingPathComponent(dto.id.uuidString).appendingPathComponent(dto.name)
                 guard FileManager.default.fileExists(atPath: candidate.path) else { continue }
                 url = candidate
-                if kind == .image { thumb = Self.thumbnail(candidate) }
             }
             loaded.append(ShelfItem(
                 id: dto.id,
@@ -159,10 +168,14 @@ final class ShelfService: ObservableObject {
                 name: dto.name,
                 addedAt: dto.addedAt,
                 bytes: dto.bytes,
-                thumbnail: thumb,
+                thumbnail: nil,
+                hasPreview: false,
             ))
         }
         items = loaded
+        for item in loaded where item.url != nil {
+            loadThumbnail(id: item.id, url: item.url!)
+        }
     }
 
     private func persist() {
@@ -174,15 +187,27 @@ final class ShelfService: ObservableObject {
         }
     }
 
-    private static func thumbnail(_ url: URL, max: CGFloat = 220) -> NSImage? {
-        guard let source = CGImageSourceCreateWithURL(url as CFURL, nil) else { return nil }
-        let options: [CFString: Any] = [
-            kCGImageSourceCreateThumbnailFromImageAlways: true,
-            kCGImageSourceThumbnailMaxPixelSize: max,
-            kCGImageSourceCreateThumbnailWithTransform: true,
-        ]
-        guard let cg = CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary) else { return nil }
-        return NSImage(cgImage: cg, size: NSSize(width: cg.width, height: cg.height))
+    private nonisolated static func stage(_ src: URL, in dir: URL) -> ShelfItem? {
+        let id = UUID()
+        let sub = dir.appendingPathComponent(id.uuidString, isDirectory: true)
+        let staged = sub.appendingPathComponent(src.lastPathComponent)
+        do {
+            try FileManager.default.createDirectory(at: sub, withIntermediateDirectories: true)
+            try FileManager.default.copyItem(at: src, to: staged)
+        } catch { return nil }
+        let isImage = imageExts.contains(src.pathExtension.lowercased())
+        let bytes = Int64((try? staged.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0)
+        return ShelfItem(
+            id: id,
+            kind: isImage ? .image : .file,
+            url: staged,
+            text: nil,
+            name: src.lastPathComponent,
+            addedAt: Date(),
+            bytes: bytes,
+            thumbnail: nil,
+            hasPreview: false,
+        )
     }
 
     private static func makeDir() -> URL? {

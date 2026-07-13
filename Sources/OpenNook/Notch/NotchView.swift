@@ -12,8 +12,9 @@ struct NotchView: View {
     @ObservedObject var viewModel: NotchViewModel
     @ObservedObject var settings: Settings
     @ObservedObject var shelf: ShelfService
+    @ObservedObject var nowPlaying: NowPlayingService
+    @ObservedObject var mic: MicService
     let registry: WidgetRegistry
-    let stats: SystemStatsService
     let onOpenSettings: () -> Void
 
     @State private var page: Int?
@@ -34,75 +35,127 @@ struct NotchView: View {
     }
 
     private var shapeSize: CGSize {
-        viewModel.isOpen ? openSize : viewModel.closedSize
+        switch viewModel.state {
+        case .open: openSize
+        case .compact: viewModel.compactSize
+        case .closed: viewModel.closedSize
+        }
     }
 
     private var topRadius: CGFloat {
-        viewModel.isOpen ? 12 : 6
+        switch viewModel.state {
+        case .open: 12
+        case .compact: 9
+        case .closed: 6
+        }
     }
 
     private var bottomRadius: CGFloat {
-        viewModel.isOpen ? 22 : 13
+        switch viewModel.state {
+        case .open: 22
+        case .compact: 19
+        case .closed: 13
+        }
     }
 
     var body: some View {
-        openContent
-            .opacity(viewModel.isOpen ? 1 : 0)
-            .allowsHitTesting(viewModel.isOpen)
-            .background(
-                GeometryReader { proxy in
-                    Color.clear.preference(key: NotchSizeKey.self, value: proxy.size)
-                },
-            )
-            .frame(width: shapeSize.width, height: shapeSize.height, alignment: .top)
-            .background { artTint }
-            .notchSurface(
-                NotchShape(topCornerRadius: topRadius, bottomCornerRadius: bottomRadius),
-                glass: settings.appearance == .glass,
-                tint: settings.glassTint,
-            )
-            .shadow(
-                color: .black.opacity(viewModel.isOpen ? 0.5 : 0),
-                radius: viewModel.isOpen ? 22 : 0, y: viewModel.isOpen ? 14 : 0,
-            )
-            .overlay(alignment: .topLeading) {
-                if viewModel.isOpen {
-                    HStack(spacing: 8) {
-                        GearButton(action: onOpenSettings)
-                        ShelfButton(viewModel: viewModel, count: shelf.count, accent: settings.accentColor)
-                        BatteryIndicator(stats: stats)
-                            .padding(.leading, 4)
-                    }
-                    .padding(.leading, 16)
-                    .frame(height: notchHeight)
-                    .transition(.opacity)
+        ZStack(alignment: .top) {
+            openContent
+                .opacity(viewModel.isOpen ? 1 : 0)
+                .allowsHitTesting(viewModel.isOpen)
+                .background(
+                    GeometryReader { proxy in
+                        Color.clear.preference(key: NotchSizeKey.self, value: proxy.size)
+                    },
+                )
+            compactContent
+                .opacity(viewModel.state == .compact ? 1 : 0)
+                .allowsHitTesting(false)
+        }
+        .frame(width: shapeSize.width, height: shapeSize.height, alignment: .top)
+        .background { artTint }
+        .notchSurface(
+            NotchShape(topCornerRadius: topRadius, bottomCornerRadius: bottomRadius),
+            glass: settings.appearance == .glass,
+            tint: settings.glassTint,
+        )
+        .shadow(
+            color: .black.opacity(viewModel.isOpen ? 0.5 : 0),
+            radius: viewModel.isOpen ? 22 : 0, y: viewModel.isOpen ? 14 : 0,
+        )
+        .overlay(alignment: .topLeading) {
+            if viewModel.isOpen {
+                HStack(spacing: 0) {
+                    MicButton(mic: mic)
+                    clusterDivider
+                    GearButton(action: onOpenSettings)
+                    clusterDivider
+                    ShelfButton(viewModel: viewModel, count: shelf.count, accent: settings.accentColor)
                 }
+                .padding(.horizontal, 5)
+                .frame(height: 26)
+                .background(Capsule().fill(.white.opacity(0.08)))
+                .padding(.leading, 16)
+                .frame(height: notchHeight, alignment: .center)
+                .padding(.top, 5)
+                .transition(.opacity)
             }
-            .overlay(alignment: .topTrailing) {
-                if viewModel.isOpen, pages.count > 1 {
-                    PageDots(count: pages.count, current: page ?? 0, accent: settings.accentColor) { i in
-                        withAnimation(.easeInOut(duration: 0.3)) { page = i }
-                    }
-                    .padding(.trailing, 16)
-                    .frame(height: notchHeight)
-                    .transition(.opacity)
+        }
+        .overlay(alignment: .topTrailing) {
+            if viewModel.isOpen, !viewModel.showShelf, pages.count > 1 {
+                PageDots(count: pages.count, current: page ?? 0, accent: settings.accentColor) { i in
+                    withAnimation(.easeInOut(duration: 0.3)) { page = i }
                 }
+                .padding(.trailing, 16)
+                .frame(height: notchHeight, alignment: .center)
+                .padding(.top, 5)
+                .transition(.opacity)
             }
-            .onPreferenceChange(NotchSizeKey.self) { viewModel.openContentSize = $0 }
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-            .environmentObject(settings)
+        }
+        .onPreferenceChange(NotchSizeKey.self) { viewModel.openContentSize = $0 }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        .environmentObject(settings)
     }
 
     private var openContent: some View {
-        Group {
+        ZStack(alignment: .top) {
+            PagerView(registry: registry, pages: pages, current: $page)
+                .opacity(viewModel.showShelf ? 0 : 1)
+                .allowsHitTesting(!viewModel.showShelf)
             if viewModel.showShelf {
                 ShelfView(service: shelf, viewModel: viewModel)
-            } else {
-                PagerView(registry: registry, pages: pages, current: $page)
+                    .transition(.opacity)
             }
         }
-        .safeAreaInset(edge: .top, spacing: 0) { Color.clear.frame(height: notchHeight) }
+        .animation(.easeInOut(duration: 0.2), value: viewModel.showShelf)
+        .safeAreaInset(edge: .top, spacing: 0) { Color.clear.frame(height: notchHeight + 10) }
         .padding(.horizontal, LayoutMetrics.slotInset)
+    }
+
+    private var compactContent: some View {
+        HStack(spacing: 0) {
+            artThumb
+            Spacer(minLength: 0)
+            Waveform(active: viewModel.state == .compact && nowPlaying.now.isPlaying, color: settings.accentColor)
+        }
+        .padding(.horizontal, 14)
+        .frame(width: viewModel.compactSize.width, height: notchHeight)
+    }
+
+    private var artThumb: some View {
+        Group {
+            if let art = nowPlaying.now.artwork {
+                Image(nsImage: art).resizable().scaledToFill()
+            } else {
+                settings.accentColor.opacity(0.5)
+            }
+        }
+        .frame(width: 22, height: 22)
+        .clipShape(RoundedRectangle(cornerRadius: 5))
+    }
+
+    private var clusterDivider: some View {
+        Rectangle().fill(.white.opacity(0.1)).frame(width: 0.5, height: 13)
     }
 
     private var showArtTint: Bool {
@@ -150,6 +203,32 @@ struct NotchView: View {
     }
 }
 
+private struct Waveform: View {
+    let active: Bool
+    let color: Color
+    private let bars = 4
+
+    var body: some View {
+        TimelineView(.animation(minimumInterval: 1.0 / 30.0, paused: !active)) { ctx in
+            let t = ctx.date.timeIntervalSinceReferenceDate
+            HStack(spacing: 2.5) {
+                ForEach(0 ..< bars, id: \.self) { i in
+                    Capsule()
+                        .fill(color)
+                        .frame(width: 2.5, height: height(t, i))
+                }
+            }
+            .frame(height: 13)
+        }
+    }
+
+    private func height(_ t: Double, _ i: Int) -> CGFloat {
+        guard active else { return 3 }
+        let v = (sin(t * 7 + Double(i) * 1.25) + 1) / 2
+        return 3 + CGFloat(v) * 10
+    }
+}
+
 private struct ShelfButton: View {
     @ObservedObject var viewModel: NotchViewModel
     let count: Int
@@ -159,9 +238,8 @@ private struct ShelfButton: View {
     var body: some View {
         Button { viewModel.showShelf.toggle() } label: {
             Icon(.package, size: 14, weight: 1.8)
-                .foregroundStyle(.white.opacity(viewModel.showShelf ? 0.95 : (hover ? 0.9 : 0.42)))
-                .frame(width: 22, height: 22)
-                .background(Circle().fill(.white.opacity(viewModel.showShelf ? 0.16 : (hover ? 0.14 : 0))))
+                .foregroundStyle(.white.opacity(viewModel.showShelf ? 0.95 : (hover ? 0.95 : 0.55)))
+                .frame(width: 30, height: 24)
                 .overlay(alignment: .topTrailing) {
                     if count > 0 {
                         Text("\(count)")
@@ -170,7 +248,7 @@ private struct ShelfButton: View {
                             .padding(.horizontal, 2.5)
                             .frame(minWidth: 11, minHeight: 11)
                             .background(Capsule().fill(accent))
-                            .offset(x: 1, y: -3)
+                            .offset(x: 0, y: -2)
                     }
                 }
                 .contentShape(Rectangle())
@@ -178,6 +256,31 @@ private struct ShelfButton: View {
         .buttonStyle(.plain)
         .onHover { hover = $0 }
         .animation(.easeOut(duration: 0.12), value: hover)
+    }
+}
+
+private struct MicButton: View {
+    @ObservedObject var mic: MicService
+    @State private var hover = false
+
+    private let mutedColor = Color(red: 0.95, green: 0.42, blue: 0.40)
+
+    var body: some View {
+        if mic.available {
+            Button { mic.toggle() } label: {
+                Image(systemName: mic.muted ? "mic.slash.fill" : "mic.fill")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(mic.muted ? mutedColor : .white.opacity(hover ? 0.95 : 0.55))
+                    .frame(width: 30, height: 24)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .onHover { hover = $0 }
+            .onAppear { mic.refresh() }
+            .help(mic.muted ? "Unmute microphone" : "Mute microphone")
+            .animation(.easeOut(duration: 0.12), value: hover)
+            .animation(.easeOut(duration: 0.15), value: mic.muted)
+        }
     }
 }
 
@@ -188,73 +291,13 @@ private struct GearButton: View {
     var body: some View {
         Button(action: action) {
             Icon(.settings, size: 14, weight: 1.8)
-                .foregroundStyle(.white.opacity(hover ? 0.9 : 0.4))
-                .frame(width: 22, height: 22)
-                .background(Circle().fill(.white.opacity(hover ? 0.14 : 0)))
+                .foregroundStyle(.white.opacity(hover ? 0.95 : 0.55))
+                .frame(width: 30, height: 24)
                 .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
         .onHover { hover = $0 }
         .animation(.easeOut(duration: 0.12), value: hover)
-    }
-}
-
-private struct BatteryIndicator: View {
-    @ObservedObject var stats: SystemStatsService
-
-    var body: some View {
-        let m = stats.metrics
-        if m.hasBattery {
-            let level = max(0, min(1, m.batteryLevel))
-            HStack(spacing: 4) {
-                HStack(spacing: 1) {
-                    ZStack(alignment: .leading) {
-                        RoundedRectangle(cornerRadius: 2)
-                            .stroke(.white.opacity(0.4), lineWidth: 0.9)
-                        RoundedRectangle(cornerRadius: 1)
-                            .fill(fill(level, charging: m.charging))
-                            .frame(width: max(1.5, 13 * level), height: 5)
-                            .offset(x: 1.5)
-                    }
-                    .frame(width: 17, height: 9)
-                    .overlay {
-                        if m.charging {
-                            Bolt()
-                                .fill(.white)
-                                .frame(width: 5, height: 7)
-                        }
-                    }
-                    RoundedRectangle(cornerRadius: 0.8)
-                        .fill(.white.opacity(0.4))
-                        .frame(width: 1.5, height: 3.5)
-                }
-                Text("\(Int((level * 100).rounded()))%")
-                    .font(.system(size: 9, weight: .semibold, design: .rounded))
-                    .monospacedDigit()
-                    .foregroundStyle(.white.opacity(0.7))
-            }
-        }
-    }
-
-    private func fill(_ level: Double, charging: Bool) -> Color {
-        if charging { return Color(red: 0.30, green: 0.86, blue: 0.52) }
-        if level <= 0.2 { return Color(red: 1.0, green: 0.42, blue: 0.40) }
-        return .white.opacity(0.85)
-    }
-}
-
-private struct Bolt: Shape {
-    func path(in rect: CGRect) -> Path {
-        let w = rect.width, h = rect.height
-        var p = Path()
-        p.move(to: CGPoint(x: w * 0.58, y: 0))
-        p.addLine(to: CGPoint(x: w * 0.20, y: h * 0.58))
-        p.addLine(to: CGPoint(x: w * 0.46, y: h * 0.58))
-        p.addLine(to: CGPoint(x: w * 0.40, y: h))
-        p.addLine(to: CGPoint(x: w * 0.80, y: h * 0.40))
-        p.addLine(to: CGPoint(x: w * 0.52, y: h * 0.40))
-        p.closeSubpath()
-        return p
     }
 }
 

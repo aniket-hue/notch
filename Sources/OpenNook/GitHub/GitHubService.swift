@@ -5,6 +5,15 @@ struct PullRequest: Identifiable, Equatable {
     enum CI { case pass, fail, pending, none }
     enum Review { case approved, changes, pending, none }
 
+    enum CheckState: Equatable { case pass, fail, running, pending, skipped }
+    struct Check: Identifiable, Equatable {
+        let id: String
+        let name: String
+        let state: CheckState
+        let url: URL?
+        let duration: String?
+    }
+
     let id: String
     let nodeId: String
     let number: Int
@@ -16,6 +25,7 @@ struct PullRequest: Identifiable, Equatable {
     let kind: Kind
     let ci: CI
     let review: Review
+    let checks: [Check]
     let updatedAt: Date
 
     var repoShort: String {
@@ -23,7 +33,7 @@ struct PullRequest: Identifiable, Equatable {
     }
 
     static func == (a: PullRequest, b: PullRequest) -> Bool {
-        a.id == b.id && a.ci == b.ci && a.review == b.review && a.title == b.title
+        a.id == b.id && a.ci == b.ci && a.review == b.review && a.title == b.title && a.checks == b.checks
     }
 }
 
@@ -89,6 +99,10 @@ final class GitHubService: ObservableObject {
         NSWorkspace.shared.open(pr.url)
     }
 
+    func openURL(_ url: URL) {
+        NSWorkspace.shared.open(url)
+    }
+
     func copyLink(_ pr: PullRequest) {
         NSPasteboard.general.clearContents()
         NSPasteboard.general.setString(pr.url.absoluteString, forType: .string)
@@ -133,12 +147,21 @@ final class GitHubService: ObservableObject {
         }
     }
 
+    private nonisolated static let iso = ISO8601DateFormatter()
+
     private static let query = """
     fragment PR on PullRequest {
       id number title url isDraft reviewDecision updatedAt
       repository { nameWithOwner }
       author { login avatarUrl }
-      commits(last: 1) { nodes { commit { statusCheckRollup { state } } } }
+      commits(last: 1) { nodes { commit { statusCheckRollup {
+        state
+        contexts(first: 40) { nodes {
+          __typename
+          ... on CheckRun { name status conclusion detailsUrl startedAt completedAt }
+          ... on StatusContext { context state targetUrl }
+        } }
+      } } } }
     }
     {
       review: search(query: "is:pr is:open review-requested:@me", type: ISSUE, first: 20) { nodes { ...PR } }
@@ -201,7 +224,22 @@ final class GitHubService: ObservableObject {
         struct Commits: Decodable { let nodes: [CommitNode] }
         struct CommitNode: Decodable { let commit: Commit }
         struct Commit: Decodable { let statusCheckRollup: Rollup? }
-        struct Rollup: Decodable { let state: String }
+        struct Rollup: Decodable {
+            let state: String
+            let contexts: Contexts?
+        }
+        struct Contexts: Decodable { let nodes: [Context] }
+        struct Context: Decodable {
+            let name: String?
+            let status: String?
+            let conclusion: String?
+            let detailsUrl: String?
+            let context: String?
+            let state: String?
+            let targetUrl: String?
+            let startedAt: String?
+            let completedAt: String?
+        }
 
         let response: Response
         do {
@@ -216,7 +254,7 @@ final class GitHubService: ObservableObject {
             return .failure(GitHubError(message: "No data returned."))
         }
 
-        let iso = ISO8601DateFormatter()
+        let iso = Self.iso
 
         func map(_ node: Node, kind: PullRequest.Kind) -> PullRequest {
             PullRequest(
@@ -231,8 +269,45 @@ final class GitHubService: ObservableObject {
                 kind: kind,
                 ci: ci(node),
                 review: review(node),
+                checks: checks(node),
                 updatedAt: iso.date(from: node.updatedAt) ?? .distantPast,
             )
+        }
+
+        func checks(_ node: Node) -> [PullRequest.Check] {
+            let contexts = node.commits.nodes.first?.commit.statusCheckRollup?.contexts?.nodes ?? []
+            func dur(_ a: String?, _ b: String?) -> String? {
+                guard let a, let b, let da = iso.date(from: a), let db = iso.date(from: b) else { return nil }
+                let s = Int(db.timeIntervalSince(da))
+                guard s >= 0 else { return nil }
+                if s < 60 { return "\(s)s" }
+                let m = s / 60, sec = s % 60
+                if m < 60 { return sec > 0 ? "\(m)m \(String(format: "%02d", sec))s" : "\(m)m" }
+                return "\(m / 60)h \(m % 60)m"
+            }
+            return contexts.compactMap { ctx -> PullRequest.Check? in
+                if let name = ctx.context, !name.isEmpty {
+                    let state: PullRequest.CheckState = switch ctx.state {
+                    case "SUCCESS": .pass
+                    case "FAILURE", "ERROR": .fail
+                    case "PENDING", "EXPECTED": .pending
+                    default: .pending
+                    }
+                    return PullRequest.Check(id: name + (ctx.targetUrl ?? ""), name: name, state: state, url: ctx.targetUrl.flatMap(URL.init), duration: nil)
+                }
+                guard let name = ctx.name, !name.isEmpty else { return nil }
+                let state: PullRequest.CheckState = if ctx.status != "COMPLETED" {
+                    ctx.status == "IN_PROGRESS" ? .running : .pending
+                } else {
+                    switch ctx.conclusion {
+                    case "SUCCESS", "NEUTRAL": .pass
+                    case "SKIPPED": .skipped
+                    case "FAILURE", "TIMED_OUT", "CANCELLED", "ACTION_REQUIRED", "STARTUP_FAILURE": .fail
+                    default: .pending
+                    }
+                }
+                return PullRequest.Check(id: name + (ctx.detailsUrl ?? ""), name: name, state: state, url: ctx.detailsUrl.flatMap(URL.init), duration: dur(ctx.startedAt, ctx.completedAt))
+            }
         }
 
         func ci(_ node: Node) -> PullRequest.CI {

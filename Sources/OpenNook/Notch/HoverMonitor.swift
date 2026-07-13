@@ -6,6 +6,7 @@ final class HoverMonitor {
     private weak var panel: NSPanel?
     private var globalMonitor: Any?
     private var localMonitor: Any?
+    private var wasInside: Bool?
 
     init(viewModel: NotchViewModel, panel: NSPanel) {
         self.viewModel = viewModel
@@ -27,28 +28,34 @@ final class HoverMonitor {
     }
 
     private func activeZone() -> CGRect {
-        let metrics = viewModel.metrics
-        let f = metrics.screen.frame
-
-        if viewModel.isOpen {
-            let s = viewModel.openContentSize == .zero ? viewModel.closedSize : viewModel.openContentSize
-            let m: CGFloat = 26
-            return CGRect(x: f.midX - s.width / 2 - m, y: f.maxY - s.height - m, width: s.width + 2 * m, height: s.height + m)
-        } else {
-            let w = metrics.notchWidth, h = metrics.notchHeight
-            let mx: CGFloat = 18, my: CGFloat = 16
-            return CGRect(x: f.midX - w / 2 - mx, y: f.maxY - h - my, width: w + 2 * mx, height: h + my)
+        let f = viewModel.metrics.screen.frame
+        let size: CGSize
+        let mx: CGFloat
+        let my: CGFloat
+        switch viewModel.state {
+        case .open:
+            size = viewModel.openContentSize == .zero ? viewModel.closedSize : viewModel.openContentSize
+            mx = 26; my = 26
+        case .compact:
+            size = viewModel.compactSize
+            mx = 18; my = 14
+        case .closed:
+            size = viewModel.closedSize
+            mx = 18; my = 16
         }
+        return CGRect(x: f.midX - size.width / 2 - mx, y: f.maxY - size.height - my, width: size.width + 2 * mx, height: size.height + my)
     }
 
     private func evaluate() {
         let inside = activeZone().contains(NSEvent.mouseLocation)
+        guard wasInside != inside else { return }
+        wasInside = inside
 
         panel?.ignoresMouseEvents = !inside
         if inside {
             viewModel.open()
         } else {
-            viewModel.scheduleClose()
+            viewModel.collapse()
         }
     }
 

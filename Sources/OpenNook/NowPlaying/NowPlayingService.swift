@@ -1,4 +1,5 @@
 import AppKit
+import SwiftUI
 
 struct NowPlaying: Equatable {
     var hasTrack = false
@@ -11,12 +12,13 @@ struct NowPlaying: Equatable {
     var anchorEpoch: Double = 0
     var artwork: NSImage?
     var artworkID: Int = 0
+    var gradient: [Color] = []
 
     static func == (l: NowPlaying, r: NowPlaying) -> Bool {
         l.hasTrack == r.hasTrack && l.title == r.title && l.artist == r.artist &&
             l.album == r.album && l.isPlaying == r.isPlaying && l.duration == r.duration &&
             l.elapsedAtAnchor == r.elapsedAtAnchor && l.anchorEpoch == r.anchorEpoch &&
-            l.artwork === r.artwork
+            l.artwork === r.artwork && l.gradient == r.gradient
     }
 
     func elapsed(at epoch: Double) -> Double {
@@ -26,7 +28,7 @@ struct NowPlaying: Equatable {
     }
 }
 
-private struct ParsedTrack {
+private struct ParsedTrack: @unchecked Sendable {
     var cleared = false
     var title = ""
     var artist = ""
@@ -35,7 +37,9 @@ private struct ParsedTrack {
     var duration: Double = 0
     var elapsed: Double = 0
     var anchorEpoch: Double = 0
-    var artworkData: Data?
+    var artwork: NSImage?
+    var artworkID: Int = 0
+    var gradient: [Color] = []
 }
 
 @MainActor
@@ -105,16 +109,14 @@ final class NowPlayingService: ObservableObject {
         n.duration = p.duration
         n.elapsedAtAnchor = p.elapsed
         n.anchorEpoch = p.anchorEpoch
-        if let d = p.artworkData {
-            n.artwork = NSImage(data: d)
-            var hasher = Hasher()
-            hasher.combine(d.count)
-            hasher.combine(d.prefix(128))
-            hasher.combine(d.suffix(128))
-            n.artworkID = hasher.finalize()
+        if let art = p.artwork {
+            n.artwork = art
+            n.artworkID = p.artworkID
+            n.gradient = p.gradient
         } else {
             n.artwork = now.artwork
             n.artworkID = now.artworkID
+            n.gradient = now.gradient
         }
         now = n
     }
@@ -139,8 +141,17 @@ final class NowPlayingService: ObservableObject {
         if let ts = payload["timestamp"] as? String {
             t.anchorEpoch = iso.date(from: ts)?.timeIntervalSince1970 ?? 0
         }
-        if let b64 = payload["artworkData"] as? String {
-            t.artworkData = Data(base64Encoded: b64)
+        if let b64 = payload["artworkData"] as? String,
+           let data = Data(base64Encoded: b64),
+           let image = NSImage(data: data)
+        {
+            t.artwork = image
+            var hasher = Hasher()
+            hasher.combine(data.count)
+            hasher.combine(data.prefix(128))
+            hasher.combine(data.suffix(128))
+            t.artworkID = hasher.finalize()
+            t.gradient = ColorExtractor.gradientColors(from: image)
         }
         return t
     }

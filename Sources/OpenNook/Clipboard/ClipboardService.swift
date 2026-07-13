@@ -7,6 +7,7 @@ struct ClipItem: Identifiable, Equatable {
     let text: String?
     let image: NSImage?
     let date: Date
+    let cacheKey: String
 
     static func == (a: ClipItem, b: ClipItem) -> Bool { a.id == b.id }
 }
@@ -16,6 +17,7 @@ private struct StoredItem: Codable {
     let text: String?
     let imageData: Data?
     let date: Date
+    let key: String
 
     init(_ item: ClipItem) {
         switch item.kind {
@@ -29,16 +31,17 @@ private struct StoredItem: Codable {
             imageData = item.image?.pngData()
         }
         date = item.date
+        key = item.cacheKey
     }
 
     func toClipItem() -> ClipItem? {
         switch kind {
         case "text":
             guard let text else { return nil }
-            return ClipItem(kind: .text, text: text, image: nil, date: date)
+            return ClipItem(kind: .text, text: text, image: nil, date: date, cacheKey: key)
         case "image":
             guard let imageData, let img = NSImage(data: imageData) else { return nil }
-            return ClipItem(kind: .image, text: nil, image: img, date: date)
+            return ClipItem(kind: .image, text: nil, image: img, date: date, cacheKey: key)
         default:
             return nil
         }
@@ -91,10 +94,11 @@ final class ClipboardService: ObservableObject {
 
     private func capture(_ pb: NSPasteboard) {
         if let str = pb.string(forType: .string), !str.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            add(ClipItem(kind: .text, text: str, image: nil, date: Date()), key: "t:" + str)
+            let key = "t:" + str
+            add(ClipItem(kind: .text, text: str, image: nil, date: Date(), cacheKey: key), key: key)
         } else if let img = NSImage(pasteboard: pb) {
             let key = "i:" + (img.tiffRepresentation?.hashValue.description ?? UUID().uuidString)
-            add(ClipItem(kind: .image, text: nil, image: img, date: Date()), key: key)
+            add(ClipItem(kind: .image, text: nil, image: img, date: Date(), cacheKey: key), key: key)
         }
     }
 
@@ -114,7 +118,7 @@ final class ClipboardService: ObservableObject {
             if let img = item.image { pb.writeObjects([img]) }
         }
         lastChangeCount = pb.changeCount
-        cache.touch(item.kind == .text ? "t:" + (item.text ?? "") : "i:" + (item.image?.tiffRepresentation?.hashValue.description ?? ""))
+        cache.touch(item.cacheKey)
         items = cache.values
         persist()
     }
@@ -131,10 +135,7 @@ final class ClipboardService: ObservableObject {
               let stored = try? JSONDecoder().decode([StoredItem].self, from: data) else { return }
         for dto in stored.reversed() {
             guard let item = dto.toClipItem() else { continue }
-            let key = item.kind == .text
-                ? "t:" + (item.text ?? "")
-                : "i:" + (item.image?.tiffRepresentation?.hashValue.description ?? UUID().uuidString)
-            cache.insert(item, for: key)
+            cache.insert(item, for: item.cacheKey)
         }
         items = cache.values
     }

@@ -1,45 +1,44 @@
 import SwiftUI
 import UniformTypeIdentifiers
 
+private let shelfCardWidth: CGFloat = 104
+private let shelfCardHeight: CGFloat = 86
+private let shelfCardGap: CGFloat = 9
+private let shelfLinkColor = Color(red: 0.36, green: 0.62, blue: 1.0)
+
 struct ShelfView: View {
     @ObservedObject var service: ShelfService
     @ObservedObject var viewModel: NotchViewModel
     @EnvironmentObject var settings: Settings
 
-    @State private var hoveredID: UUID?
     @State private var offset: CGFloat = 0
-
-    private let cardWidth: CGFloat = 104
-    private let cardHeight: CGFloat = 86
-    private let cardGap: CGFloat = 9
-    private let linkColor = Color(red: 0.36, green: 0.62, blue: 1.0)
 
     private let hPad: CGFloat = 8
 
     var body: some View {
         GeometryReader { geo in
             let viewport = geo.size.width - hPad * 2
-            let content = CGFloat(service.items.count) * (cardWidth + cardGap) - cardGap
+            let content = CGFloat(service.items.count) * (shelfCardWidth + shelfCardGap) - shelfCardGap
             let maxOffset = max(0, content - viewport)
             let pos = min(offset, maxOffset)
             let faded: Edge.Set = (pos > 1 ? .leading : Edge.Set()).union(pos < maxOffset - 1 ? .trailing : Edge.Set())
             VStack(alignment: .leading, spacing: 6) {
                 header(viewport: viewport, maxOffset: maxOffset)
                 if service.items.isEmpty {
-                    emptyState.frame(height: cardHeight)
+                    emptyState.frame(height: shelfCardHeight)
                 } else {
-                    HStack(spacing: cardGap) {
-                        ForEach(service.items) { card($0) }
+                    HStack(spacing: shelfCardGap) {
+                        ForEach(service.items) { ShelfCard(item: $0, service: service) }
                     }
-                    .frame(height: cardHeight)
+                    .frame(height: shelfCardHeight)
                     .offset(x: -pos)
-                    .frame(width: viewport, height: cardHeight + 12, alignment: .leading)
+                    .frame(width: viewport, height: shelfCardHeight + 12, alignment: .leading)
                     .edgeFade(faded)
                 }
             }
             .padding(.horizontal, hPad)
         }
-        .frame(height: cardHeight + 40)
+        .frame(height: shelfCardHeight + 40)
     }
 
     private func header(viewport: CGFloat, maxOffset: CGFloat) -> some View {
@@ -96,18 +95,23 @@ struct ShelfView: View {
         )
         .animation(.easeOut(duration: 0.15), value: active)
     }
+}
 
-    private func card(_ item: ShelfItem) -> some View {
-        let hovered = hoveredID == item.id
-        return preview(item, hovered: hovered)
-            .frame(width: cardWidth, height: cardHeight)
+private struct ShelfCard: View {
+    let item: ShelfItem
+    let service: ShelfService
+    @State private var hovered = false
+
+    var body: some View {
+        preview
+            .frame(width: shelfCardWidth, height: shelfCardHeight)
             .clipShape(RoundedRectangle(cornerRadius: 12))
-            .overlay(alignment: .topLeading) { typeBadge(item).padding(7) }
+            .overlay(alignment: .topLeading) { typeBadge.padding(7) }
             .overlay(alignment: .topTrailing) {
                 if hovered {
-                    deleteButton(item).padding(6)
+                    deleteButton.padding(6)
                 } else {
-                    timePill(item.addedAt).padding(7)
+                    timePill.padding(7)
                 }
             }
             .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(.white.opacity(0.07), lineWidth: 1))
@@ -117,35 +121,33 @@ struct ShelfView: View {
             .contentShape(RoundedRectangle(cornerRadius: 12))
             .onTapGesture { service.open(item) }
             .onDrag { service.itemProvider(for: item) }
-            .onHover { inside in
-                if inside { hoveredID = item.id }
-                else if hoveredID == item.id { hoveredID = nil }
-            }
+            .onHover { hovered = $0 }
     }
 
     @ViewBuilder
-    private func preview(_ item: ShelfItem, hovered: Bool) -> some View {
+    private var preview: some View {
         switch item.kind {
-        case .image:
-            if let thumb = item.thumbnail {
-                Image(nsImage: thumb).resizable().scaledToFill()
+        case .image, .file:
+            if item.hasPreview, let thumb = item.thumbnail {
+                ZStack {
+                    placeholder
+                    Image(nsImage: thumb).resizable().scaledToFill()
+                }
             } else {
-                filePreview(item, hovered: hovered)
+                filePreview
             }
-        case .file:
-            filePreview(item, hovered: hovered)
         case .link:
-            linkPreview(item, hovered: hovered)
+            linkPreview
         case .text:
-            textPreview(item.text ?? "", hovered: hovered)
+            textPreview(item.text ?? "")
         }
     }
 
-    private func filePreview(_ item: ShelfItem, hovered: Bool) -> some View {
+    private var filePreview: some View {
         ZStack {
-            placeholder(hovered)
+            placeholder
             VStack(spacing: 6) {
-                Image(nsImage: fileIcon(item))
+                Image(nsImage: fileIcon)
                     .resizable()
                     .scaledToFit()
                     .frame(width: 34, height: 34)
@@ -167,13 +169,13 @@ struct ShelfView: View {
         }
     }
 
-    private func linkPreview(_ item: ShelfItem, hovered: Bool) -> some View {
+    private var linkPreview: some View {
         ZStack(alignment: .topLeading) {
-            placeholder(hovered)
+            placeholder
             VStack(alignment: .leading, spacing: 2) {
                 Text(item.name)
                     .font(.system(size: 11, weight: .semibold, design: .rounded))
-                    .foregroundStyle(linkColor)
+                    .foregroundStyle(shelfLinkColor)
                     .lineLimit(2)
                     .multilineTextAlignment(.leading)
             }
@@ -182,9 +184,9 @@ struct ShelfView: View {
         }
     }
 
-    private func textPreview(_ raw: String, hovered: Bool) -> some View {
+    private func textPreview(_ raw: String) -> some View {
         ZStack(alignment: .topLeading) {
-            placeholder(hovered)
+            placeholder
             Text(raw.trimmingCharacters(in: .whitespacesAndNewlines))
                 .font(.system(size: 10, design: .rounded))
                 .foregroundStyle(.white.opacity(0.85))
@@ -194,7 +196,7 @@ struct ShelfView: View {
         }
     }
 
-    private func deleteButton(_ item: ShelfItem) -> some View {
+    private var deleteButton: some View {
         Button { service.remove(item) } label: {
             Image(systemName: "xmark")
                 .font(.system(size: 8, weight: .bold))
@@ -206,8 +208,8 @@ struct ShelfView: View {
         .buttonStyle(.plain)
     }
 
-    private func typeBadge(_ item: ShelfItem) -> some View {
-        let (symbol, tint, solid) = badgeStyle(item)
+    private var typeBadge: some View {
+        let (symbol, tint, solid) = badgeStyle
         return Image(systemName: symbol)
             .font(.system(size: 9, weight: .bold))
             .foregroundStyle(tint)
@@ -215,17 +217,17 @@ struct ShelfView: View {
             .background(RoundedRectangle(cornerRadius: 6).fill(.black.opacity(solid ? 0.45 : 0)))
     }
 
-    private func badgeStyle(_ item: ShelfItem) -> (String, Color, Bool) {
+    private var badgeStyle: (String, Color, Bool) {
         switch item.kind {
         case .image: ("photo", .white.opacity(0.85), true)
         case .file: ("doc", .white.opacity(0.55), false)
-        case .link: ("link", linkColor, false)
+        case .link: ("link", shelfLinkColor, false)
         case .text: ("text.alignleft", .white.opacity(0.5), false)
         }
     }
 
-    private func timePill(_ date: Date) -> some View {
-        Text(relativeTime(date))
+    private var timePill: some View {
+        Text(relativeTime(item.addedAt))
             .font(.system(size: 8, weight: .medium, design: .rounded))
             .monospacedDigit()
             .foregroundStyle(.white.opacity(0.9))
@@ -234,11 +236,14 @@ struct ShelfView: View {
             .background(Capsule().fill(.black.opacity(0.4)))
     }
 
-    private func placeholder(_ hovered: Bool) -> some View {
+    private var placeholder: some View {
         Color.white.opacity(hovered ? 0.13 : 0.07)
     }
 
-    private func fileIcon(_ item: ShelfItem) -> NSImage {
+    private var fileIcon: NSImage {
+        if let thumb = item.thumbnail {
+            return thumb
+        }
         if let url = item.url {
             return NSWorkspace.shared.icon(forFile: url.path)
         }
